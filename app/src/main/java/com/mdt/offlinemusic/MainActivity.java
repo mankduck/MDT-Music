@@ -1,9 +1,10 @@
 package com.mdt.offlinemusic;
 
+import com.yausername.youtubedl_android.YoutubeDL;import com.yausername.youtubedl_android.YoutubeDLRequest;import com.yausername.youtubedl_android.YoutubeDLException;import com.yausername.youtubedl_android.FFmpeg;
 import android.app.*;import android.os.*;import android.content.*;import android.database.*;import android.graphics.*;import android.graphics.drawable.*;import android.net.Uri;import android.provider.OpenableColumns;import android.text.*;import android.view.*;import android.view.inputmethod.*;import android.widget.*;import java.io.*;import java.security.*;import java.util.*;
 
 public class MainActivity extends Activity {
- final int BG=0xFF0D1020,CARD=0xFF1A2034,PURPLE=0xFFB47AFF,WHITE=0xFFF4F4FA,MUTED=0xFF98A1B9;int tab=0; int managerPage=0; String managerQuery=""; boolean full=false;String openedAlbum=null;String query="",topic="Tất cả";MusicDb db;LinearLayout root,body,mini,nav;Handler handler=new Handler();MusicDb.Song editing;String pendingAudio="",pendingCover="";final int PICK_AUDIO=101,PICK_COVER=102;boolean dark=true;SharedPreferences prefs;boolean importing=false; AlertDialog busyDialog; AlertDialog editorDialog; ImageView coverPreview;
+ final int BG=0xFF0D1020,CARD=0xFF1A2034,PURPLE=0xFFB47AFF,WHITE=0xFFF4F4FA,MUTED=0xFF98A1B9;int tab=0; int managerPage=0; String managerQuery=""; boolean full=false;String openedAlbum=null;String query="",topic="Tất cả";MusicDb db;LinearLayout root,body,mini,nav;Handler handler=new Handler();MusicDb.Song editing;String pendingAudio="",pendingCover="";final int PICK_AUDIO=101,PICK_COVER=102;boolean dark=true;SharedPreferences prefs;boolean importing=false; boolean ytBusy=false; AlertDialog busyDialog; AlertDialog editorDialog; ImageView coverPreview;
  BroadcastReceiver receiver=new BroadcastReceiver(){@Override public void onReceive(Context c,Intent i){updateMini();if(full)refreshPlayer();}};
  @Override public void onCreate(Bundle b){super.onCreate(b);getWindow().setStatusBarColor(BG);getWindow().setNavigationBarColor(BG);db=new MusicDb(this);prefs=getSharedPreferences("settings",MODE_PRIVATE);dark=prefs.getBoolean("dark",true);if(Build.VERSION.SDK_INT>=33&&checkSelfPermission("android.permission.POST_NOTIFICATIONS")!=android.content.pm.PackageManager.PERMISSION_GRANTED)requestPermissions(new String[]{"android.permission.POST_NOTIFICATIONS"},7);if(prefs.contains("pin")){pinDialog();}else render();handler.postDelayed(new Runnable(){public void run(){if(full)refreshPlayer();else updateMini();handler.postDelayed(this,1000);}},1000);}
  @Override protected void onResume(){super.onResume();if(Build.VERSION.SDK_INT>=33)registerReceiver(receiver,new IntentFilter(PlayerService.ACTION),Context.RECEIVER_NOT_EXPORTED);else registerReceiver(receiver,new IntentFilter(PlayerService.ACTION));}
@@ -96,10 +97,10 @@ public class MainActivity extends Activity {
  void youtubeResults(ArrayList<YoutubeItem> items,String playlist){
   LinearLayout content=vertical();pad(content,12,10);content.setBackgroundColor(bg());
   EditText search=edit("Tìm video trong playlist...");search.setSingleLine(true);content.addView(search);space(content,8);
-  TextView hint=text("Chọn bài để nhập âm thanh từ liên kết file MP3/M4A được phép tải. YouTube không cung cấp file MP3 qua API.",12,sub(),false);content.addView(hint);space(content,9);
+  TextView hint=text("Chọn video rồi bấm Tải MP3. Ứng dụng sẽ thử lấy âm thanh và lưu offline vào thư viện chung; một số video có thể không hỗ trợ tải.",12,sub(),false);content.addView(hint);space(content,9);
   LinkedHashSet<String> picked=new LinkedHashSet<>();
   LinearLayout selectedBar=horizontal();CheckBox all=new CheckBox(this);all.setText("Chọn tất cả");all.setTextColor(ink());selectedBar.addView(all,new LinearLayout.LayoutParams(0,-2,1));
-  TextView importButton=btn("Nhập âm thanh",()->{});styleSmallButton(importButton,PURPLE);selectedBar.addView(importButton);content.addView(selectedBar);
+  TextView importButton=btn("Tải MP3",()->{});styleSmallButton(importButton,PURPLE);selectedBar.addView(importButton);content.addView(selectedBar);
   ScrollView scroll=new ScrollView(this);LinearLayout results=vertical();scroll.addView(results);content.addView(scroll,new LinearLayout.LayoutParams(-1,dp(310)));
   Runnable[] fill=new Runnable[1]; fill[0]=()->{results.removeAllViews();String q=search.getText().toString().toLowerCase(java.util.Locale.ROOT);for(YoutubeItem item:items){if(!(item.title+" "+item.channel).toLowerCase(java.util.Locale.ROOT).contains(q))continue;
    LinearLayout row=horizontal();pad(row,9,10);row.setBackground(shape(card(),12));CheckBox cb=new CheckBox(this);cb.setButtonTintList(android.content.res.ColorStateList.valueOf(PURPLE));cb.setChecked(picked.contains(item.videoId));row.addView(cb);
@@ -113,20 +114,50 @@ public class MainActivity extends Activity {
   ScrollView wrap=wrapScroll(content);dialogPanel.addView(wrap,new LinearLayout.LayoutParams(-1,0,1));
   LinearLayout footer=horizontal();footer.setGravity(Gravity.END|Gravity.CENTER_VERTICAL);pad(footer,16,9);TextView close=text("ĐÓNG",15,PURPLE,true);pad(close,17,12);footer.addView(close);dialogPanel.addView(footer);
   AlertDialog dialog=new AlertDialog.Builder(this).setView(dialogPanel).create();close.setOnClickListener(v->dialog.dismiss());
-  importButton.setOnClickListener(v->{ArrayList<YoutubeItem> queue=new ArrayList<>();for(YoutubeItem item:items)if(picked.contains(item.videoId))queue.add(item);if(queue.isEmpty())return;dialog.dismiss();importAudioForYoutube(queue,0);});
+  importButton.setOnClickListener(v->{ArrayList<YoutubeItem> queue=new ArrayList<>();for(YoutubeItem item:items)if(picked.contains(item.videoId))queue.add(item);if(queue.isEmpty())return;dialog.dismiss();downloadYoutubeQueue(queue,0,0,0);});
   dialog.show();if(dialog.getWindow()!=null){dialog.getWindow().setBackgroundDrawableResource(android.R.color.transparent);dialog.getWindow().setLayout(getResources().getDisplayMetrics().widthPixels-dp(32),Math.min(dp(600),getResources().getDisplayMetrics().heightPixels-dp(130)));}
  }
- // YouTube API metadata is not a downloadable audio URL. The user supplies a legitimate direct file link.
- void importAudioForYoutube(ArrayList<YoutubeItem> queue,int index){if(index>=queue.size()){toast("Đã xử lý danh sách được chọn");render();return;}
+ // Native Android yt-dlp + FFmpeg conversion: downloads an individual video audio track.
+ void downloadYoutubeQueue(ArrayList<YoutubeItem> queue,int index,int success,int failed){
+  if(index>=queue.size()){ytBusy=false;render();new AlertDialog.Builder(this).setTitle("Hoàn tất tải nhạc").setMessage("Đã lưu "+success+" bài. Lỗi "+failed+" bài. Các bài thành công nằm trong thư viện Quản lý.").setPositiveButton("Đóng",null).show();return;}
+  if(index==0){if(ytBusy){toast("Đang có tiến trình tải khác");return;}ytBusy=true;}
   YoutubeItem item=queue.get(index);
-  LinearLayout form=vertical();pad(form,18,12);form.addView(text(item.title,16,ink(),true));space(form,8);
-  form.addView(text("Nhập liên kết trực tiếp tới tệp âm thanh MP3/M4A mà bạn có quyền tải. Link trang xem YouTube không phải link MP3.",13,sub(),false));space(form,8);
-  EditText address=edit("https://example.com/audio.mp3");address.setSingleLine(true);form.addView(address);
-  new AlertDialog.Builder(this).setTitle("Nhập bài "+(index+1)+" / "+queue.size()).setView(form).setNegativeButton("Bỏ qua",(d,w)->importAudioForYoutube(queue,index+1)).setPositiveButton("Tải và lưu",(d,w)->{
-   String link=address.getText().toString().trim();if(!link.startsWith("https://")){toast("Chỉ hỗ trợ liên kết file HTTPS");importAudioForYoutube(queue,index);return;}
-   downloadAudioToLibrary(item,link,()->importAudioForYoutube(queue,index+1));
-  }).show();
+  ProgressDialog progress=new ProgressDialog(this);progress.setTitle("Tải MP3 "+(index+1)+" / "+queue.size());progress.setMessage(item.title);progress.setProgressStyle(ProgressDialog.STYLE_HORIZONTAL);progress.setMax(100);progress.setCancelable(false);progress.show();
+  new Thread(()->{
+   File tempDir=null,finalMp3=null,cover=null;String error=null;boolean saved=false;
+   try{
+    YoutubeDL.getInstance().init(getApplicationContext());FFmpeg.getInstance().init(getApplicationContext());
+    File library=new File(getFilesDir(),"library");if(!library.exists()&&!library.mkdirs())throw new IOException("Không thể tạo bộ nhớ nhạc");
+    tempDir=new File(getCacheDir(),"yt_"+java.util.UUID.randomUUID());if(!tempDir.mkdirs())throw new IOException("Không thể tạo thư mục tạm");
+    YoutubeDLRequest request=new YoutubeDLRequest("https://www.youtube.com/watch?v="+item.videoId);
+    request.addOption("--no-playlist");request.addOption("--no-overwrites");request.addOption("-f","bestaudio/best");
+    request.addOption("-x");request.addOption("--audio-format","mp3");request.addOption("--audio-quality","2");
+    request.addOption("-o",new File(tempDir,"audio.%(ext)s").getAbsolutePath());
+    YoutubeDL.getInstance().execute(request,(percent,eta)->runOnUiThread(()->{if(progress.isShowing())progress.setProgress(Math.max(0,Math.min(99,(int)percent)));}));
+    File produced=new File(tempDir,"audio.mp3");
+    if(!produced.isFile()||produced.length()==0)throw new IOException("Không nhận được file MP3; video có thể bị hạn chế.");
+    if(produced.length()>150L*1024*1024)throw new IOException("File vượt 150 MB");
+    finalMp3=new File(library,java.util.UUID.randomUUID()+".mp3");
+    try(InputStream in=new FileInputStream(produced);OutputStream out=new FileOutputStream(finalMp3)){byte[] bytes=new byte[16384];int n;while((n=in.read(bytes))!=-1)out.write(bytes,0,n);}
+    android.media.MediaMetadataRetriever verify=new android.media.MediaMetadataRetriever();
+    try{verify.setDataSource(finalMp3.getAbsolutePath());if(verify.extractMetadata(android.media.MediaMetadataRetriever.METADATA_KEY_DURATION)==null)throw new IOException("Âm thanh tải về không phát được");}finally{verify.release();}
+    // Artwork is best-effort; a valid MP3 should still be saved if artwork fails.
+    try{
+      java.net.HttpURLConnection art=(java.net.HttpURLConnection)new java.net.URL("https://i.ytimg.com/vi/"+item.videoId+"/hqdefault.jpg").openConnection();
+      art.setConnectTimeout(7000);art.setReadTimeout(7000);
+      if(art.getResponseCode()==200){File covers=new File(getFilesDir(),"covers");covers.mkdirs();cover=new File(covers,java.util.UUID.randomUUID()+".jpg");
+       try(InputStream in=art.getInputStream();OutputStream out=new FileOutputStream(cover)){byte[] bytes=new byte[8192];int n;long total=0;while((n=in.read(bytes))!=-1){total+=n;if(total>5*1024*1024)throw new IOException("Ảnh quá lớn");out.write(bytes,0,n);}}}
+      art.disconnect();
+    }catch(Exception imageError){if(cover!=null)cover.delete();cover=null;}
+    MusicDb.Song song=new MusicDb.Song();song.title=item.title;song.artist=item.channel;song.path=finalMp3.getAbsolutePath();song.cover=cover==null?"":cover.getAbsolutePath();song.description="YouTube: https://www.youtube.com/watch?v="+item.videoId;
+    if(db.save(song)<0)throw new IOException("Lỗi thêm bài vào cơ sở dữ liệu");saved=true;
+   }catch(Exception e){error=e.getMessage();if(error==null)error=e.getClass().getSimpleName();}
+   finally{if(!saved){if(finalMp3!=null)finalMp3.delete();if(cover!=null)cover.delete();}if(tempDir!=null)deleteTempTree(tempDir);}
+   final String failure=error;final boolean complete=saved;
+   runOnUiThread(()->{if(progress.isShowing())progress.dismiss();if(complete){toast("Đã lưu: "+item.title);downloadYoutubeQueue(queue,index+1,success+1,failed);}else new AlertDialog.Builder(this).setTitle("Không tải được MP3").setMessage(item.title+"\n"+failure).setPositiveButton("Tiếp tục",(d,w)->downloadYoutubeQueue(queue,index+1,success,failed+1)).show();});
+  }).start();
  }
+ void deleteTempTree(File dir){if(dir==null||!dir.exists())return;File[] files=dir.listFiles();if(files!=null)for(File f:files)deleteTempTree(f);dir.delete();}
  void downloadAudioToLibrary(YoutubeItem item,String address,Runnable done){
   ProgressDialog progress=new ProgressDialog(this);progress.setTitle("Đang lưu nhạc offline");progress.setMessage(item.title);progress.setProgressStyle(ProgressDialog.STYLE_HORIZONTAL);progress.setMax(100);progress.setCancelable(false);progress.show();
   new Thread(()->{File temp=null,cover=null,target=null;String error=null;MusicDb.Song song=null;try{
@@ -244,7 +275,7 @@ public class MainActivity extends Activity {
  }
  ScrollView wrapScroll(View child){ScrollView s=new ScrollView(this);s.addView(child);return s;}
  void deleteOwnedFile(String path){if(empty(path))return;try{File f=new File(path).getCanonicalFile();File root=getFilesDir().getCanonicalFile();if(f.getPath().startsWith(root.getPath()+File.separator))f.delete();}catch(Exception ignored){}}
- void settings(){settingsRow("Giao diện tối",dark,checked->{dark=checked;prefs.edit().putBoolean("dark",checked).apply();render();});space(body,12);body.addView(text("YouTube",16,ink(),true));body.addView(text("Dán link playlist công khai để đọc danh sách video.",13,sub(),false));space(body,8);body.addView(btn("▶  Nhập link playlist YouTube",()->youtubePlaylistDialog()));space(body,16);body.addView(text("Độ sáng trong ứng dụng",16,ink(),true));SeekBar bright=new SeekBar(this);bright.setMax(100);bright.setProgress(prefs.getInt("brightness",100));bright.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener(){public void onProgressChanged(SeekBar b,int progress,boolean u){if(u){float f=Math.max(.1f,progress/100f);getWindow().getAttributes().screenBrightness=f;android.view.WindowManager.LayoutParams lp=getWindow().getAttributes();lp.screenBrightness=f;getWindow().setAttributes(lp);prefs.edit().putInt("brightness",progress).apply();}}public void onStartTrackingTouch(SeekBar b){}public void onStopTrackingTouch(SeekBar b){}});body.addView(bright);space(body,16);body.addView(text("Ngôn ngữ",16,ink(),true));body.addView(text("Tiếng Việt (phiên bản này)",13,sub(),false));space(body,20);body.addView(btn(prefs.contains("pin")?"Đổi / tắt mã PIN":"Thiết lập mã PIN",()->pinSettings()));space(body,15);body.addView(btn("♻  Bài hát đã xóa",()->deletedSongsScreen()));space(body,15);body.addView(text("MDT Music • Lưu offline • Không cần tài khoản",13,sub(),false));space(body,12);body.addView(text("Phiên bản v1.9.0",13,sub(),false));}
+ void settings(){settingsRow("Giao diện tối",dark,checked->{dark=checked;prefs.edit().putBoolean("dark",checked).apply();render();});space(body,12);body.addView(text("YouTube",16,ink(),true));body.addView(text("Dán link playlist công khai để đọc danh sách video.",13,sub(),false));space(body,8);body.addView(btn("▶  Nhập link playlist YouTube",()->youtubePlaylistDialog()));space(body,16);body.addView(text("Độ sáng trong ứng dụng",16,ink(),true));SeekBar bright=new SeekBar(this);bright.setMax(100);bright.setProgress(prefs.getInt("brightness",100));bright.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener(){public void onProgressChanged(SeekBar b,int progress,boolean u){if(u){float f=Math.max(.1f,progress/100f);getWindow().getAttributes().screenBrightness=f;android.view.WindowManager.LayoutParams lp=getWindow().getAttributes();lp.screenBrightness=f;getWindow().setAttributes(lp);prefs.edit().putInt("brightness",progress).apply();}}public void onStartTrackingTouch(SeekBar b){}public void onStopTrackingTouch(SeekBar b){}});body.addView(bright);space(body,16);body.addView(text("Ngôn ngữ",16,ink(),true));body.addView(text("Tiếng Việt (phiên bản này)",13,sub(),false));space(body,20);body.addView(btn(prefs.contains("pin")?"Đổi / tắt mã PIN":"Thiết lập mã PIN",()->pinSettings()));space(body,15);body.addView(btn("♻  Bài hát đã xóa",()->deletedSongsScreen()));space(body,15);body.addView(text("MDT Music • Lưu offline • Không cần tài khoản",13,sub(),false));space(body,12);body.addView(text("Phiên bản v2.0.0",13,sub(),false));}
  interface Checked{void set(boolean v);}void settingsRow(String label,boolean value,Checked cb){Switch sw=new Switch(this);sw.setText(label);sw.setTextColor(ink());sw.setChecked(value);sw.setOnCheckedChangeListener((v,c)->cb.set(c));body.addView(sw);}
  void pinSettings(){if(!prefs.contains("pin")){pinEntry("Tạo mã PIN", "Nhập 4 số để khóa ứng dụng",false, pin->confirmNewPin(pin));return;}pinEntry("Xác nhận mã PIN", "Nhập mã PIN hiện tại",false, pin->{if(hash(pin).equals(prefs.getString("pin",""))){new AlertDialog.Builder(this).setTitle("Quản lý mã PIN").setItems(new String[]{"Đổi mã PIN","Tắt mã PIN"},(d,which)->{if(which==1){prefs.edit().remove("pin").apply();toast("Đã tắt mã PIN");render();}else pinEntry("Mã PIN mới","Nhập 4 số mới",false,next->confirmNewPin(next));}).show();}else{toast("Mã PIN không đúng");pinSettings();}});}
  interface PinResult{void accept(String pin);}
