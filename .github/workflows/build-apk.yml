@@ -10,6 +10,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       HAS_KEY: ${{ secrets.MDT_KEYSTORE_BASE64 != '' }}
+      MDT_YOUTUBE_API_KEY: ${{ secrets.MDT_YOUTUBE_API_KEY }}
     steps:
       - name: Checkout source
         uses: actions/checkout@v4

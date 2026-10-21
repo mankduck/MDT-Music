@@ -3,7 +3,7 @@ package com.mdt.offlinemusic;
 import android.app.*;import android.os.*;import android.content.*;import android.database.*;import android.graphics.*;import android.graphics.drawable.*;import android.net.Uri;import android.provider.OpenableColumns;import android.text.*;import android.view.*;import android.view.inputmethod.*;import android.widget.*;import java.io.*;import java.security.*;import java.util.*;
 
 public class MainActivity extends Activity {
- final int BG=0xFF0D1020,CARD=0xFF1A2034,PURPLE=0xFFB47AFF,WHITE=0xFFF4F4FA,MUTED=0xFF98A1B9;int tab=0; boolean full=false;String openedAlbum=null;String query="",topic="Tất cả";MusicDb db;LinearLayout root,body,mini,nav;Handler handler=new Handler();MusicDb.Song editing;String pendingAudio="",pendingCover="";final int PICK_AUDIO=101,PICK_COVER=102;boolean dark=true;SharedPreferences prefs;boolean importing=false; AlertDialog busyDialog; AlertDialog editorDialog; ImageView coverPreview;
+ final int BG=0xFF0D1020,CARD=0xFF1A2034,PURPLE=0xFFB47AFF,WHITE=0xFFF4F4FA,MUTED=0xFF98A1B9;int tab=0; int managerPage=0; String managerQuery=""; boolean full=false;String openedAlbum=null;String query="",topic="Tất cả";MusicDb db;LinearLayout root,body,mini,nav;Handler handler=new Handler();MusicDb.Song editing;String pendingAudio="",pendingCover="";final int PICK_AUDIO=101,PICK_COVER=102;boolean dark=true;SharedPreferences prefs;boolean importing=false; AlertDialog busyDialog; AlertDialog editorDialog; ImageView coverPreview;
  BroadcastReceiver receiver=new BroadcastReceiver(){@Override public void onReceive(Context c,Intent i){updateMini();if(full)refreshPlayer();}};
  @Override public void onCreate(Bundle b){super.onCreate(b);getWindow().setStatusBarColor(BG);getWindow().setNavigationBarColor(BG);db=new MusicDb(this);prefs=getSharedPreferences("settings",MODE_PRIVATE);dark=prefs.getBoolean("dark",true);if(Build.VERSION.SDK_INT>=33&&checkSelfPermission("android.permission.POST_NOTIFICATIONS")!=android.content.pm.PackageManager.PERMISSION_GRANTED)requestPermissions(new String[]{"android.permission.POST_NOTIFICATIONS"},7);if(prefs.contains("pin")){pinDialog();}else render();handler.postDelayed(new Runnable(){public void run(){if(full)refreshPlayer();else updateMini();handler.postDelayed(this,1000);}},1000);}
  @Override protected void onResume(){super.onResume();if(Build.VERSION.SDK_INT>=33)registerReceiver(receiver,new IntentFilter(PlayerService.ACTION),Context.RECEIVER_NOT_EXPORTED);else registerReceiver(receiver,new IntentFilter(PlayerService.ACTION));}
@@ -50,16 +50,21 @@ public class MainActivity extends Activity {
 
  // YouTube discovery only: the official API provides metadata, not MP3 downloads.
  void youtubePlaylistDialog(){
-  if(!networkAvailable()){toast("Cần kết nối Internet để xem playlist YouTube");return;}
+  if(!networkAvailable()){toast("Cần Internet để đọc playlist YouTube");return;}
   LinearLayout container=vertical();pad(container,16,12);
-  TextView note=text("Đọc playlist CÔNG KHAI qua YouTube Data API. Không tải hoặc sao chép âm thanh từ YouTube. Bài MP3 của bạn vẫn nằm trong thư viện offline chung.",13,0xFF39465B,false);container.addView(note);space(container,10);
-  EditText key=edit("YouTube Data API key (Google Cloud)");key.setSingleLine(true);key.setText(prefs.getString("yt_api_key",""));container.addView(key);space(container,8);
-  EditText link=edit("Link playlist hoặc mã PL...");link.setSingleLine(true);link.setText(prefs.getString("yt_playlist",""));container.addView(link);space(container,10);
-  new AlertDialog.Builder(this,AlertDialog.THEME_DEVICE_DEFAULT_LIGHT).setTitle("Playlist YouTube")
-   .setView(container).setNegativeButton("Hủy",null).setPositiveButton("Xem playlist",(d,w)->{
-    String api=key.getText().toString().trim(),id=extractPlaylistId(link.getText().toString().trim());
-    if(api.isEmpty()||id.isEmpty()){toast("Nhập API key và link playlist hợp lệ");return;}
-    prefs.edit().putString("yt_api_key",api).putString("yt_playlist",id).apply();loadYoutubePlaylist(api,id);
+  TextView note=text("Dán link playlist YouTube công khai. Nhạc offline trong thư viện vẫn hoạt động khi mất mạng.",13,0xFF39465B,false);container.addView(note);space(container,12);
+  EditText link=edit("https://www.youtube.com/playlist?list=...");link.setSingleLine(true);link.setText(prefs.getString("yt_playlist_url",""));container.addView(link);
+  new AlertDialog.Builder(this,AlertDialog.THEME_DEVICE_DEFAULT_LIGHT).setTitle("Đọc playlist YouTube")
+   .setView(container).setNegativeButton("Hủy",null).setPositiveButton("Đọc danh sách",(d,w)->{
+    String url=link.getText().toString().trim(),id=extractPlaylistId(url);
+    if(id.isEmpty()){toast("Vui lòng dán liên kết playlist hợp lệ");return;}
+    String api=BuildConfig.YOUTUBE_API_KEY;
+    if(api==null||api.trim().isEmpty()){
+      new AlertDialog.Builder(this).setTitle("Chưa cấu hình dịch vụ YouTube")
+       .setMessage("Nhà phát triển cần cấu hình YouTube Data API Key trong GitHub Actions. Người dùng không cần tự tạo hoặc nhập API Key.")
+       .setPositiveButton("Đóng",null).show();return;
+    }
+    prefs.edit().putString("yt_playlist_url",url).apply();loadYoutubePlaylist(api,id);
    }).show();
  }
  boolean networkAvailable(){android.net.ConnectivityManager cm=(android.net.ConnectivityManager)getSystemService(CONNECTIVITY_SERVICE);if(cm==null)return false;android.net.Network n=cm.getActiveNetwork();if(n==null)return false;android.net.NetworkCapabilities c=cm.getNetworkCapabilities(n);return c!=null&&c.hasCapability(android.net.NetworkCapabilities.NET_CAPABILITY_INTERNET);}
@@ -84,7 +89,7 @@ public class MainActivity extends Activity {
     }
     page=data.optString("nextPageToken","");
    }while(!page.isEmpty()&&items.size()<500); }catch(Exception e){failure=e.getMessage();}
-   final String error=failure;runOnUiThread(()->{progress.dismiss();if(isFinishing())return;if(error!=null){new AlertDialog.Builder(this).setTitle("Không thể đọc playlist").setMessage(error+"\nKiểm tra API key, quota và chế độ công khai của playlist.").setPositiveButton("Đóng",null).show();}else youtubeResults(items,id);});
+   final String error=failure;runOnUiThread(()->{progress.dismiss();if(isFinishing())return;if(error!=null){new AlertDialog.Builder(this).setTitle("Không thể đọc playlist").setMessage(error+"\nPlaylist phải truy cập công khai; dịch vụ cần còn hạn mức API.").setPositiveButton("Đóng",null).show();}else youtubeResults(items,id);});
   }).start();
  }
  static class YoutubeItem{String title,channel,videoId;}
@@ -103,19 +108,45 @@ public class MainActivity extends Activity {
  void manager(){
   body.addView(btn("＋  Nhập MP3 từ thiết bị",()->pickAudio()));space(body,10);
   body.addView(btn("▣  Tạo / quản lý album",()->albumEditor()));space(body,10);
-  body.addView(btn("▶  Playlist YouTube (cần Internet)",()->youtubePlaylistDialog()));space(body,18);
+  body.addView(btn("▶  Nhập link playlist YouTube",()->youtubePlaylistDialog()));space(body,18);
   title(body,"Danh sách quản lý",null);space(body,10);
-  ArrayList<MusicDb.Song> all=songs();if(all.isEmpty()){placeholder("Chưa có bài hát trong thư viện.");return;}
+  EditText search=edit("Tìm theo bài hát, nghệ sĩ hoặc album...");search.setSingleLine(true);
+  search.setText(managerQuery);body.addView(search);space(body,10);
+  LinearLayout results=vertical();body.addView(results);
+  Runnable refresh=()->populateManager(results);
+  search.addTextChangedListener(new TextWatcher(){
+   public void beforeTextChanged(CharSequence t,int a,int c,int d){}
+   public void onTextChanged(CharSequence t,int st,int before,int count){managerQuery=t.toString();managerPage=0;refresh.run();}
+   public void afterTextChanged(Editable e){}
+  });refresh.run();
+ }
+ void populateManager(LinearLayout target){
+  target.removeAllViews();String q=managerQuery.trim().toLowerCase(java.util.Locale.ROOT);
+  ArrayList<MusicDb.Song> filtered=new ArrayList<>();
+  for(MusicDb.Song s:songs())if((s.title+" "+s.artist+" "+s.album).toLowerCase(java.util.Locale.ROOT).contains(q))filtered.add(s);
+  int pageSize=20,totalPages=Math.max(1,(filtered.size()+pageSize-1)/pageSize);
+  managerPage=Math.max(0,Math.min(managerPage,totalPages-1));
+  TextView count=text("Tìm thấy "+filtered.size()+" bài hát",13,sub(),false);target.addView(count);space(target,9);
+  if(filtered.isEmpty()){target.addView(text("Không có bài hát phù hợp.",14,sub(),false));return;}
   LinearLayout header=horizontal();pad(header,9,12);header.setBackground(shape(dark?0xFF30354A:0xFFE1E3EA,12));
-  TextView ht=text("Bài hát / Nghệ sĩ",13,ink(),true);header.addView(ht,new LinearLayout.LayoutParams(0,-2,1));
-  TextView actions=text("Thao tác",13,ink(),true);actions.setGravity(Gravity.CENTER);header.addView(actions,new LinearLayout.LayoutParams(dp(134),-2));body.addView(header);
-  for(int index=0;index<all.size();index++){MusicDb.Song song=all.get(index);
-   LinearLayout row=horizontal();pad(row,9,11);row.setBackground(shape(index%2==0?card():(dark?0xFF22283C:0xFFEBECF3),10));
-   LinearLayout info=vertical();TextView name=text(song.title,14,ink(),true);name.setMaxLines(2);info.addView(name);info.addView(text(empty(song.artist)?"Chưa có nghệ sĩ":song.artist,12,sub(),false));row.addView(info,new LinearLayout.LayoutParams(0,-2,1));
+  header.addView(text("Bài hát / Nghệ sĩ",13,ink(),true),new LinearLayout.LayoutParams(0,-2,1));
+  TextView actions=text("Thao tác",13,ink(),true);actions.setGravity(Gravity.CENTER);header.addView(actions,new LinearLayout.LayoutParams(dp(134),-2));target.addView(header);
+  int from=managerPage*pageSize,to=Math.min(from+pageSize,filtered.size());
+  for(int index=from;index<to;index++){
+   MusicDb.Song song=filtered.get(index);
+   LinearLayout row=horizontal();pad(row,9,11);row.setBackground(shape((index-from)%2==0?card():(dark?0xFF22283C:0xFFEBECF3),10));
+   LinearLayout info=vertical();TextView name=text(song.title,14,ink(),true);name.setMaxLines(2);info.addView(name);
+   info.addView(text(empty(song.artist)?"Chưa có nghệ sĩ":song.artist,12,sub(),false));row.addView(info,new LinearLayout.LayoutParams(0,-2,1));
    TextView edit=btn("Sửa",()->editor(song));TextView del=btn("Xóa",()->confirmSoftDelete(song));
-   styleSmallButton(edit, PURPLE);styleSmallButton(del,0xFFB94D61);
-   row.addView(edit);spaceW(row,6);row.addView(del);body.addView(row);space(body,5);
+   styleSmallButton(edit,PURPLE);styleSmallButton(del,0xFFB94D61);row.addView(edit);spaceW(row,6);row.addView(del);target.addView(row);space(target,5);
   }
+  space(target,10);LinearLayout controls=horizontal();controls.setGravity(Gravity.CENTER);
+  TextView previous=btn("‹ Trước",()->{managerPage--;populateManager(target);});styleSmallButton(previous,PURPLE);
+  previous.setEnabled(managerPage>0);previous.setAlpha(managerPage>0?1f:.35f);controls.addView(previous);spaceW(controls,12);
+  TextView page=text("Trang "+(managerPage+1)+" / "+totalPages,13,ink(),true);controls.addView(page);spaceW(controls,12);
+  TextView next=btn("Sau ›",()->{managerPage++;populateManager(target);});styleSmallButton(next,PURPLE);
+  next.setEnabled(managerPage<totalPages-1);next.setAlpha(managerPage<totalPages-1?1f:.35f);controls.addView(next);
+  target.addView(controls);
  }
  void styleSmallButton(TextView v,int color){v.setTextSize(12);v.setPadding(dp(9),dp(11),dp(9),dp(11));v.setBackground(shape(color,10));}
  void confirmSoftDelete(MusicDb.Song s){new AlertDialog.Builder(this).setTitle("Chuyển vào Bài hát đã xóa?").setMessage(s.title+"\nBạn có thể khôi phục trong Cài đặt. File MP3 chưa bị xóa.").setNegativeButton("Hủy",null).setPositiveButton("Xóa",(d,w)->{
@@ -169,7 +200,7 @@ public class MainActivity extends Activity {
  }
  ScrollView wrapScroll(View child){ScrollView s=new ScrollView(this);s.addView(child);return s;}
  void deleteOwnedFile(String path){if(empty(path))return;try{File f=new File(path).getCanonicalFile();File root=getFilesDir().getCanonicalFile();if(f.getPath().startsWith(root.getPath()+File.separator))f.delete();}catch(Exception ignored){}}
- void settings(){settingsRow("Giao diện tối",dark,checked->{dark=checked;prefs.edit().putBoolean("dark",checked).apply();render();});space(body,12);body.addView(text("Độ sáng trong ứng dụng",16,ink(),true));SeekBar bright=new SeekBar(this);bright.setMax(100);bright.setProgress(prefs.getInt("brightness",100));bright.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener(){public void onProgressChanged(SeekBar b,int progress,boolean u){if(u){float f=Math.max(.1f,progress/100f);getWindow().getAttributes().screenBrightness=f;android.view.WindowManager.LayoutParams lp=getWindow().getAttributes();lp.screenBrightness=f;getWindow().setAttributes(lp);prefs.edit().putInt("brightness",progress).apply();}}public void onStartTrackingTouch(SeekBar b){}public void onStopTrackingTouch(SeekBar b){}});body.addView(bright);space(body,16);body.addView(text("Ngôn ngữ",16,ink(),true));body.addView(text("Tiếng Việt (phiên bản này)",13,sub(),false));space(body,20);body.addView(btn(prefs.contains("pin")?"Đổi / tắt mã PIN":"Thiết lập mã PIN",()->pinSettings()));space(body,15);body.addView(btn("♻  Bài hát đã xóa",()->deletedSongsScreen()));space(body,15);body.addView(text("MDT Music • Lưu offline • Không cần tài khoản",13,sub(),false));space(body,12);body.addView(text("Phiên bản v1.5.0",13,sub(),false));}
+ void settings(){settingsRow("Giao diện tối",dark,checked->{dark=checked;prefs.edit().putBoolean("dark",checked).apply();render();});space(body,12);body.addView(text("Độ sáng trong ứng dụng",16,ink(),true));SeekBar bright=new SeekBar(this);bright.setMax(100);bright.setProgress(prefs.getInt("brightness",100));bright.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener(){public void onProgressChanged(SeekBar b,int progress,boolean u){if(u){float f=Math.max(.1f,progress/100f);getWindow().getAttributes().screenBrightness=f;android.view.WindowManager.LayoutParams lp=getWindow().getAttributes();lp.screenBrightness=f;getWindow().setAttributes(lp);prefs.edit().putInt("brightness",progress).apply();}}public void onStartTrackingTouch(SeekBar b){}public void onStopTrackingTouch(SeekBar b){}});body.addView(bright);space(body,16);body.addView(text("Ngôn ngữ",16,ink(),true));body.addView(text("Tiếng Việt (phiên bản này)",13,sub(),false));space(body,20);body.addView(btn(prefs.contains("pin")?"Đổi / tắt mã PIN":"Thiết lập mã PIN",()->pinSettings()));space(body,15);body.addView(btn("♻  Bài hát đã xóa",()->deletedSongsScreen()));space(body,15);body.addView(text("MDT Music • Lưu offline • Không cần tài khoản",13,sub(),false));space(body,12);body.addView(text("Phiên bản v1.7.0",13,sub(),false));}
  interface Checked{void set(boolean v);}void settingsRow(String label,boolean value,Checked cb){Switch sw=new Switch(this);sw.setText(label);sw.setTextColor(ink());sw.setChecked(value);sw.setOnCheckedChangeListener((v,c)->cb.set(c));body.addView(sw);}
  void pinSettings(){if(!prefs.contains("pin")){pinEntry("Tạo mã PIN", "Nhập 4 số để khóa ứng dụng",false, pin->confirmNewPin(pin));return;}pinEntry("Xác nhận mã PIN", "Nhập mã PIN hiện tại",false, pin->{if(hash(pin).equals(prefs.getString("pin",""))){new AlertDialog.Builder(this).setTitle("Quản lý mã PIN").setItems(new String[]{"Đổi mã PIN","Tắt mã PIN"},(d,which)->{if(which==1){prefs.edit().remove("pin").apply();toast("Đã tắt mã PIN");render();}else pinEntry("Mã PIN mới","Nhập 4 số mới",false,next->confirmNewPin(next));}).show();}else{toast("Mã PIN không đúng");pinSettings();}});}
  interface PinResult{void accept(String pin);}
