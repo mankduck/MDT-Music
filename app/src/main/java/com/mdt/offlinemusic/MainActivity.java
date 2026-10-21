@@ -1,6 +1,6 @@
 package com.mdt.offlinemusic;
 
-import com.yausername.youtubedl_android.YoutubeDL;import com.yausername.youtubedl_android.YoutubeDLRequest;import com.yausername.youtubedl_android.YoutubeDLException;import com.yausername.ffmpeg.FFmpeg;
+import com.yausername.youtubedl_android.YoutubeDL;import com.yausername.youtubedl_android.YoutubeDLRequest;import com.yausername.youtubedl_android.YoutubeDLException;import com.yausername.ffmpeg.FFmpeg;import com.yausername.youtubedl_android.YoutubeDL.UpdateChannel;
 import android.app.*;import android.os.*;import android.content.*;import android.database.*;import android.graphics.*;import android.graphics.drawable.*;import android.net.Uri;import android.provider.OpenableColumns;import android.text.*;import android.view.*;import android.view.inputmethod.*;import android.widget.*;import java.io.*;import java.security.*;import java.util.*;
 
 public class MainActivity extends Activity {
@@ -122,11 +122,39 @@ public class MainActivity extends Activity {
   if(index>=queue.size()){ytBusy=false;render();new AlertDialog.Builder(this).setTitle("Hoàn tất tải nhạc").setMessage("Đã lưu "+success+" bài. Lỗi "+failed+" bài. Các bài thành công nằm trong thư viện Quản lý.").setPositiveButton("Đóng",null).show();return;}
   if(index==0){if(ytBusy){toast("Đang có tiến trình tải khác");return;}ytBusy=true;}
   YoutubeItem item=queue.get(index);
+  // Source-based duplicate guard. All imports still use the same music library.
+  String sourceLink="https://www.youtube.com/watch?v="+item.videoId;
+  boolean alreadySaved=false;
+  for(MusicDb.Song existing:songs()){
+   if(existing.description!=null && existing.description.contains(sourceLink)){
+    if(existing.path!=null && new File(existing.path).isFile()){alreadySaved=true;break;}
+   }
+  }
+  if(alreadySaved){
+   new AlertDialog.Builder(this).setTitle("Bài hát đã có")
+    .setMessage(item.title+"\n\nBài hát này đã có trong thư viện offline.")
+    .setNegativeButton("Bỏ qua",(d,w)->downloadYoutubeQueue(queue,index+1,success,failed))
+    .setPositiveButton("Tải bản khác",(d,w)->downloadYoutubeItem(queue,index,success,failed))
+    .show();
+   return;
+  }
+  downloadYoutubeItem(queue,index,success,failed);
+ }
+ void downloadYoutubeItem(ArrayList<YoutubeItem> queue,int index,int success,int failed){
+  YoutubeItem item=queue.get(index);
   ProgressDialog progress=new ProgressDialog(this);progress.setTitle("Tải MP3 "+(index+1)+" / "+queue.size());progress.setMessage(item.title);progress.setProgressStyle(ProgressDialog.STYLE_HORIZONTAL);progress.setMax(100);progress.setCancelable(false);progress.show();
   new Thread(()->{
    File tempDir=null,finalMp3=null,cover=null;String error=null;boolean saved=false;
    try{
     YoutubeDL.getInstance().init(getApplicationContext());FFmpeg.getInstance().init(getApplicationContext());
+    // Update the extractor once per download batch, on the worker thread (never block the UI).
+    // A failed update should not delete local music or block a retry with the bundled version.
+    if(index==0){
+     runOnUiThread(()->progress.setMessage("Đang kiểm tra bản cập nhật yt-dlp..."));
+     try{YoutubeDL.getInstance().updateYoutubeDL(getApplicationContext(),UpdateChannel.STABLE);}
+     catch(Exception updateError){android.util.Log.w("MDTMusic","Cannot update yt-dlp; using installed extractor",updateError);}
+     runOnUiThread(()->progress.setMessage(item.title));
+    }
     File library=new File(getFilesDir(),"library");if(!library.exists()&&!library.mkdirs())throw new IOException("Không thể tạo bộ nhớ nhạc");
     tempDir=new File(getCacheDir(),"yt_"+java.util.UUID.randomUUID());if(!tempDir.mkdirs())throw new IOException("Không thể tạo thư mục tạm");
     YoutubeDLRequest request=new YoutubeDLRequest("https://www.youtube.com/watch?v="+item.videoId);
@@ -151,11 +179,23 @@ public class MainActivity extends Activity {
     }catch(Exception imageError){if(cover!=null)cover.delete();cover=null;}
     MusicDb.Song song=new MusicDb.Song();song.title=item.title;song.artist=item.channel;song.path=finalMp3.getAbsolutePath();song.cover=cover==null?"":cover.getAbsolutePath();song.description="YouTube: https://www.youtube.com/watch?v="+item.videoId;
     if(db.save(song)<0)throw new IOException("Lỗi thêm bài vào cơ sở dữ liệu");saved=true;
-   }catch(Exception e){error=e.getMessage();if(error==null)error=e.getClass().getSimpleName();}
+   }catch(Exception e){error=e.getMessage();if(error==null)error=e.getClass().getSimpleName();if(error.contains("HTTP Error 403"))error="YouTube từ chối yêu cầu tải (HTTP 403). Đã thử kiểm tra cập nhật yt-dlp; video hoặc luồng hiện tại vẫn có thể không tải được.\n\nChi tiết: "+error;}
    finally{if(!saved){if(finalMp3!=null)finalMp3.delete();if(cover!=null)cover.delete();}if(tempDir!=null)deleteTempTree(tempDir);}
    final String failure=error;final boolean complete=saved;
-   runOnUiThread(()->{if(progress.isShowing())progress.dismiss();if(complete){toast("Đã lưu: "+item.title);downloadYoutubeQueue(queue,index+1,success+1,failed);}else new AlertDialog.Builder(this).setTitle("Không tải được MP3").setMessage(item.title+"\n"+failure).setPositiveButton("Tiếp tục",(d,w)->downloadYoutubeQueue(queue,index+1,success,failed+1)).show();});
+   runOnUiThread(()->{if(progress.isShowing())progress.dismiss();if(complete){toast("Đã lưu: "+item.title);downloadYoutubeQueue(queue,index+1,success+1,failed);}else new AlertDialog.Builder(this).setTitle("Không tải được MP3")
+      .setMessage(item.title+"\n\n"+friendlyDownloadError(failure))
+      .setNeutralButton("Thử lại",(d,w)->downloadYoutubeItem(queue,index,success,failed))
+      .setNegativeButton("Dừng hàng đợi",(d,w)->{ytBusy=false;render();})
+      .setPositiveButton("Bỏ qua bài",(d,w)->downloadYoutubeQueue(queue,index+1,success,failed+1)).show();});
   }).start();
+ }
+ String friendlyDownloadError(String raw){
+  if(raw==null||raw.trim().isEmpty())return "Không nhận được thông tin lỗi. Hãy thử lại khi có mạng.";
+  String lower=raw.toLowerCase(java.util.Locale.ROOT);
+  if(lower.contains("403")||lower.contains("forbidden"))return "YouTube đã từ chối luồng âm thanh (HTTP 403). Đây không phải lỗi quyền lưu trữ. Cập nhật yt-dlp có thể giúp nhưng không bảo đảm với video này.\n\n"+raw;
+  if(lower.contains("ffmpeg"))return "Bộ chuyển đổi âm thanh gặp lỗi.\n\n"+raw;
+  if(lower.contains("unable to extract"))return "Không lấy được luồng âm thanh từ video.\n\n"+raw;
+  return raw;
  }
  void deleteTempTree(File dir){if(dir==null||!dir.exists())return;File[] files=dir.listFiles();if(files!=null)for(File f:files)deleteTempTree(f);dir.delete();}
  void downloadAudioToLibrary(YoutubeItem item,String address,Runnable done){
