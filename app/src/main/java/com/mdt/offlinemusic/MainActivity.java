@@ -47,9 +47,63 @@ public class MainActivity extends Activity {
  TextView close=text("×",19,sub(),false);close.setGravity(Gravity.TOP|Gravity.CENTER_HORIZONTAL);close.setContentDescription("Đóng và dừng phát nhạc");mini.addView(close,new LinearLayout.LayoutParams(dp(27),dp(43)));close.setOnClickListener(v->{stopService(new Intent(this,PlayerService.class));mini.setVisibility(View.GONE);});info.setOnClickListener(v->showPlayer());
  }
 
+
+ // YouTube discovery only: the official API provides metadata, not MP3 downloads.
+ void youtubePlaylistDialog(){
+  if(!networkAvailable()){toast("Cần kết nối Internet để xem playlist YouTube");return;}
+  LinearLayout container=vertical();pad(container,16,12);
+  TextView note=text("Đọc playlist CÔNG KHAI qua YouTube Data API. Không tải hoặc sao chép âm thanh từ YouTube. Bài MP3 của bạn vẫn nằm trong thư viện offline chung.",13,0xFF39465B,false);container.addView(note);space(container,10);
+  EditText key=edit("YouTube Data API key (Google Cloud)");key.setSingleLine(true);key.setText(prefs.getString("yt_api_key",""));container.addView(key);space(container,8);
+  EditText link=edit("Link playlist hoặc mã PL...");link.setSingleLine(true);link.setText(prefs.getString("yt_playlist",""));container.addView(link);space(container,10);
+  new AlertDialog.Builder(this,AlertDialog.THEME_DEVICE_DEFAULT_LIGHT).setTitle("Playlist YouTube")
+   .setView(container).setNegativeButton("Hủy",null).setPositiveButton("Xem playlist",(d,w)->{
+    String api=key.getText().toString().trim(),id=extractPlaylistId(link.getText().toString().trim());
+    if(api.isEmpty()||id.isEmpty()){toast("Nhập API key và link playlist hợp lệ");return;}
+    prefs.edit().putString("yt_api_key",api).putString("yt_playlist",id).apply();loadYoutubePlaylist(api,id);
+   }).show();
+ }
+ boolean networkAvailable(){android.net.ConnectivityManager cm=(android.net.ConnectivityManager)getSystemService(CONNECTIVITY_SERVICE);if(cm==null)return false;android.net.Network n=cm.getActiveNetwork();if(n==null)return false;android.net.NetworkCapabilities c=cm.getNetworkCapabilities(n);return c!=null&&c.hasCapability(android.net.NetworkCapabilities.NET_CAPABILITY_INTERNET);}
+ String extractPlaylistId(String input){
+  if(input.matches("[A-Za-z0-9_-]{10,}"))return input;
+  try{Uri uri=Uri.parse(input);String id=uri.getQueryParameter("list");return id!=null&&id.matches("[A-Za-z0-9_-]{10,}")?id:"";}catch(Exception e){return "";}
+ }
+ void loadYoutubePlaylist(String key,String id){
+  final ProgressDialog progress=new ProgressDialog(this);progress.setMessage("Đang đọc playlist YouTube...");progress.setCancelable(false);progress.show();
+  new Thread(()->{
+   ArrayList<YoutubeItem> items=new ArrayList<>();String page="";String failure=null;
+   try{do{
+    String url="https://www.googleapis.com/youtube/v3/playlistItems?part=snippet,contentDetails&maxResults=50&playlistId="+java.net.URLEncoder.encode(id,"UTF-8")+"&key="+java.net.URLEncoder.encode(key,"UTF-8")+(page.isEmpty()?"":"&pageToken="+java.net.URLEncoder.encode(page,"UTF-8"));
+    java.net.HttpURLConnection con=(java.net.HttpURLConnection)new java.net.URL(url).openConnection();con.setConnectTimeout(12000);con.setReadTimeout(12000);
+    int code=con.getResponseCode();java.io.InputStream stream=code<400?con.getInputStream():con.getErrorStream();java.io.ByteArrayOutputStream out=new java.io.ByteArrayOutputStream();byte[] bytes=new byte[8192];int count;while((count=stream.read(bytes))!=-1)out.write(bytes,0,count);con.disconnect();
+    org.json.JSONObject data=new org.json.JSONObject(out.toString("UTF-8"));if(code>=400)throw new IOException(data.optJSONObject("error")!=null?data.getJSONObject("error").optString("message"):"HTTP "+code);
+    org.json.JSONArray records=data.optJSONArray("items");if(records!=null)for(int i=0;i<records.length();i++){
+      org.json.JSONObject record=records.getJSONObject(i),sn=record.optJSONObject("snippet"),content=record.optJSONObject("contentDetails");if(sn==null)continue;
+      YoutubeItem item=new YoutubeItem();item.title=sn.optString("title","");item.channel=sn.optString("videoOwnerChannelTitle",sn.optString("channelTitle",""));item.videoId=content==null?"":content.optString("videoId","");
+      if(item.videoId.isEmpty()||item.title.equals("Private video")||item.title.equals("Deleted video"))continue;
+      items.add(item);
+    }
+    page=data.optString("nextPageToken","");
+   }while(!page.isEmpty()&&items.size()<500); }catch(Exception e){failure=e.getMessage();}
+   final String error=failure;runOnUiThread(()->{progress.dismiss();if(isFinishing())return;if(error!=null){new AlertDialog.Builder(this).setTitle("Không thể đọc playlist").setMessage(error+"\nKiểm tra API key, quota và chế độ công khai của playlist.").setPositiveButton("Đóng",null).show();}else youtubeResults(items,id);});
+  }).start();
+ }
+ static class YoutubeItem{String title,channel,videoId;}
+ void youtubeResults(ArrayList<YoutubeItem> items,String playlist){
+  LinearLayout content=vertical();pad(content,12,10);content.setBackgroundColor(bg());
+  EditText search=edit("Tìm video trong playlist...");search.setSingleLine(true);content.addView(search);space(content,8);
+  TextView hint=text("Video trên YouTube (chưa được tải offline). Chạm để mở video trong ứng dụng YouTube hoặc trình duyệt.",12,sub(),false);content.addView(hint);
+  ScrollView scroll=new ScrollView(this);LinearLayout results=vertical();scroll.addView(results);content.addView(scroll,new LinearLayout.LayoutParams(-1,dp(350)));
+  Runnable fill=()->{results.removeAllViews();String q=search.getText().toString().toLowerCase(java.util.Locale.ROOT);for(YoutubeItem item:items){if(!(item.title+" "+item.channel).toLowerCase(java.util.Locale.ROOT).contains(q))continue;
+   LinearLayout row=vertical();pad(row,10,12);row.setBackground(shape(card(),12));row.addView(text(item.title,15,ink(),true));row.addView(text(item.channel,12,sub(),false));results.addView(row);space(results,6);
+   row.setOnClickListener(v->{try{startActivity(new Intent(Intent.ACTION_VIEW,Uri.parse("https://www.youtube.com/watch?v="+item.videoId)));}catch(Exception e){toast("Không mở được video");}});
+  }if(results.getChildCount()==0)results.addView(text("Không tìm thấy video",14,sub(),false));};
+  search.addTextChangedListener(new TextWatcher(){public void beforeTextChanged(CharSequence s,int a,int c,int f){}public void onTextChanged(CharSequence s,int st,int before,int count){fill.run();}public void afterTextChanged(Editable e){}});fill.run();
+  new AlertDialog.Builder(this).setTitle("Playlist: "+items.size()+" video").setView(content).setPositiveButton("Đóng",null).show();
+ }
  void manager(){
   body.addView(btn("＋  Nhập MP3 từ thiết bị",()->pickAudio()));space(body,10);
-  body.addView(btn("▣  Tạo / quản lý album",()->albumEditor()));space(body,18);
+  body.addView(btn("▣  Tạo / quản lý album",()->albumEditor()));space(body,10);
+  body.addView(btn("▶  Playlist YouTube (cần Internet)",()->youtubePlaylistDialog()));space(body,18);
   title(body,"Danh sách quản lý",null);space(body,10);
   ArrayList<MusicDb.Song> all=songs();if(all.isEmpty()){placeholder("Chưa có bài hát trong thư viện.");return;}
   LinearLayout header=horizontal();pad(header,9,12);header.setBackground(shape(dark?0xFF30354A:0xFFE1E3EA,12));
