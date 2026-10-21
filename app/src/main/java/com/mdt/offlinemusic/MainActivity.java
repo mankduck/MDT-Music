@@ -133,7 +133,7 @@ public class MainActivity extends Activity {
     request.addOption("--no-playlist");request.addOption("--no-overwrites");request.addOption("-f","bestaudio/best");
     request.addOption("-x");request.addOption("--audio-format","mp3");request.addOption("--audio-quality","2");
     request.addOption("-o",new File(tempDir,"audio.%(ext)s").getAbsolutePath());
-    YoutubeDL.getInstance().execute(request,(percent,eta,line)->{runOnUiThread(()->{if(progress.isShowing())progress.setProgress(Math.max(0,Math.min(99,percent.intValue())));});return kotlin.Unit.INSTANCE;});
+    YoutubeDL.getInstance().execute(request,"mdt_"+java.util.UUID.randomUUID().toString(),(percent,eta,line)->{runOnUiThread(()->{if(progress.isShowing())progress.setProgress(Math.max(0,Math.min(99,percent.intValue())));});return kotlin.Unit.INSTANCE;});
     File produced=new File(tempDir,"audio.mp3");
     if(!produced.isFile()||produced.length()==0)throw new IOException("Không nhận được file MP3; video có thể bị hạn chế.");
     if(produced.length()>150L*1024*1024)throw new IOException("File vượt 150 MB");
