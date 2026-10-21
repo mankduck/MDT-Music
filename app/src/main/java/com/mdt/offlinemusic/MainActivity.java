@@ -151,7 +151,7 @@ public class MainActivity extends Activity {
     // A failed update should not delete local music or block a retry with the bundled version.
     if(index==0){
      runOnUiThread(()->progress.setMessage("Đang kiểm tra bản cập nhật yt-dlp..."));
-     try{YoutubeDL.getInstance().updateYoutubeDL(getApplicationContext(),UpdateChannel.STABLE);}
+     try{YoutubeDL.getInstance().updateYoutubeDL(getApplicationContext(),UpdateChannel._STABLE);}
      catch(Exception updateError){android.util.Log.w("MDTMusic","Cannot update yt-dlp; using installed extractor",updateError);}
      runOnUiThread(()->progress.setMessage(item.title));
     }
