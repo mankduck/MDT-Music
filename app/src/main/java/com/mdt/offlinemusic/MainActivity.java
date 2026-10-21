@@ -88,7 +88,17 @@ public class MainActivity extends Activity {
    entries.addView(row);space(entries,5);
   }
   update.run();
-  AlertDialog dialog=new AlertDialog.Builder(this).setTitle("Bài hát đã xóa ("+removed.size()+")").setView(wrapScroll(layout)).setPositiveButton("Đóng",null).create();
+  // The title, list and footer share one themed surface (no system-default dark bars).
+  LinearLayout dialogPanel=vertical();dialogPanel.setBackground(shape(bg(),18));
+  TextView dialogTitle=text("Bài hát đã xóa ("+removed.size()+")",22,ink(),true);
+  pad(dialogTitle,18,17);dialogPanel.addView(dialogTitle);
+  ScrollView trashScroll=wrapScroll(layout);trashScroll.setFillViewport(false);
+  dialogPanel.addView(trashScroll,new LinearLayout.LayoutParams(-1,0,1));
+  LinearLayout footer=horizontal();footer.setGravity(Gravity.END|Gravity.CENTER_VERTICAL);pad(footer,16,9);
+  TextView closeTrash=text("ĐÓNG",15,PURPLE,true);pad(closeTrash,17,12);footer.addView(closeTrash);
+  dialogPanel.addView(footer);
+  AlertDialog dialog=new AlertDialog.Builder(this).setView(dialogPanel).create();
+  closeTrash.setOnClickListener(v->dialog.dismiss());
   restore.setOnClickListener(v->{if(selected.isEmpty())return;db.restore(selected);dialog.dismiss();render();deletedSongsScreen();toast("Đã khôi phục "+selected.size()+" bài hát");});
   erase.setOnClickListener(v->{if(selected.isEmpty())return;new AlertDialog.Builder(this).setTitle("Xóa vĩnh viễn?").setMessage("Xóa "+selected.size()+" bài hát và file MP3 trong vùng riêng của ứng dụng? Không thể khôi phục.").setNegativeButton("Hủy",null).setPositiveButton("Xóa vĩnh viễn",(d,w)->{
     ArrayList<MusicDb.Song> toDelete=new ArrayList<>();for(MusicDb.Song s:removed)if(selected.contains(s.id))toDelete.add(s);
@@ -97,10 +107,15 @@ public class MainActivity extends Activity {
     dialog.dismiss();render();deletedSongsScreen();toast("Đã xóa vĩnh viễn "+toDelete.size()+" bài hát");
    }).show();});
   dialog.show();
+  if(dialog.getWindow()!=null){
+   dialog.getWindow().setBackgroundDrawableResource(android.R.color.transparent);
+   dialog.getWindow().setLayout(getResources().getDisplayMetrics().widthPixels-dp(32),
+       Math.min(dp(550),getResources().getDisplayMetrics().heightPixels-dp(130)));
+  }
  }
  ScrollView wrapScroll(View child){ScrollView s=new ScrollView(this);s.addView(child);return s;}
  void deleteOwnedFile(String path){if(empty(path))return;try{File f=new File(path).getCanonicalFile();File root=getFilesDir().getCanonicalFile();if(f.getPath().startsWith(root.getPath()+File.separator))f.delete();}catch(Exception ignored){}}
- void settings(){settingsRow("Giao diện tối",dark,checked->{dark=checked;prefs.edit().putBoolean("dark",checked).apply();render();});space(body,12);body.addView(text("Độ sáng trong ứng dụng",16,ink(),true));SeekBar bright=new SeekBar(this);bright.setMax(100);bright.setProgress(prefs.getInt("brightness",100));bright.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener(){public void onProgressChanged(SeekBar b,int progress,boolean u){if(u){float f=Math.max(.1f,progress/100f);getWindow().getAttributes().screenBrightness=f;android.view.WindowManager.LayoutParams lp=getWindow().getAttributes();lp.screenBrightness=f;getWindow().setAttributes(lp);prefs.edit().putInt("brightness",progress).apply();}}public void onStartTrackingTouch(SeekBar b){}public void onStopTrackingTouch(SeekBar b){}});body.addView(bright);space(body,16);body.addView(text("Ngôn ngữ",16,ink(),true));body.addView(text("Tiếng Việt (phiên bản này)",13,sub(),false));space(body,20);body.addView(btn(prefs.contains("pin")?"Đổi / tắt mã PIN":"Thiết lập mã PIN",()->pinSettings()));space(body,15);body.addView(btn("♻  Bài hát đã xóa",()->deletedSongsScreen()));space(body,15);body.addView(text("MDT Music • Lưu offline • Không cần tài khoản",13,sub(),false));}
+ void settings(){settingsRow("Giao diện tối",dark,checked->{dark=checked;prefs.edit().putBoolean("dark",checked).apply();render();});space(body,12);body.addView(text("Độ sáng trong ứng dụng",16,ink(),true));SeekBar bright=new SeekBar(this);bright.setMax(100);bright.setProgress(prefs.getInt("brightness",100));bright.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener(){public void onProgressChanged(SeekBar b,int progress,boolean u){if(u){float f=Math.max(.1f,progress/100f);getWindow().getAttributes().screenBrightness=f;android.view.WindowManager.LayoutParams lp=getWindow().getAttributes();lp.screenBrightness=f;getWindow().setAttributes(lp);prefs.edit().putInt("brightness",progress).apply();}}public void onStartTrackingTouch(SeekBar b){}public void onStopTrackingTouch(SeekBar b){}});body.addView(bright);space(body,16);body.addView(text("Ngôn ngữ",16,ink(),true));body.addView(text("Tiếng Việt (phiên bản này)",13,sub(),false));space(body,20);body.addView(btn(prefs.contains("pin")?"Đổi / tắt mã PIN":"Thiết lập mã PIN",()->pinSettings()));space(body,15);body.addView(btn("♻  Bài hát đã xóa",()->deletedSongsScreen()));space(body,15);body.addView(text("MDT Music • Lưu offline • Không cần tài khoản",13,sub(),false));space(body,12);body.addView(text("Phiên bản v1.5.0",13,sub(),false));}
  interface Checked{void set(boolean v);}void settingsRow(String label,boolean value,Checked cb){Switch sw=new Switch(this);sw.setText(label);sw.setTextColor(ink());sw.setChecked(value);sw.setOnCheckedChangeListener((v,c)->cb.set(c));body.addView(sw);}
  void pinSettings(){if(!prefs.contains("pin")){pinEntry("Tạo mã PIN", "Nhập 4 số để khóa ứng dụng",false, pin->confirmNewPin(pin));return;}pinEntry("Xác nhận mã PIN", "Nhập mã PIN hiện tại",false, pin->{if(hash(pin).equals(prefs.getString("pin",""))){new AlertDialog.Builder(this).setTitle("Quản lý mã PIN").setItems(new String[]{"Đổi mã PIN","Tắt mã PIN"},(d,which)->{if(which==1){prefs.edit().remove("pin").apply();toast("Đã tắt mã PIN");render();}else pinEntry("Mã PIN mới","Nhập 4 số mới",false,next->confirmNewPin(next));}).show();}else{toast("Mã PIN không đúng");pinSettings();}});}
  interface PinResult{void accept(String pin);}
