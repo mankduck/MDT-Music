@@ -29,3 +29,9 @@ Dự án Android Studio **Java + Android SDK**, hoạt động hoàn toàn offli
 
 ## Cấu trúc chính
 `MusicDb.java`: SQLite bài hát. `PlayerService.java`: Android foreground media player. `MainActivity.java`: giao diện + import + chỉnh sửa. `DiscView.java`: đĩa than vẽ bằng Canvas. `WaveView.java`: sóng hoạt họa.
+
+
+## Cập nhật v1.8.0
+- Chuyển mục nhập playlist YouTube từ tab **Quản lý** sang **Cài đặt**.
+- Đồng bộ màu header/footer của hộp thoại kết quả playlist YouTube với giao diện sáng/tối, bỏ hai dải đen thừa.
+- Giữ nguyên cơ chế đọc playlist bằng URL, chưa tải MP3.

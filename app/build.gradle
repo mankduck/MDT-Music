@@ -1,6 +1,6 @@
 plugins { id 'com.android.application' }
 android { namespace 'com.mdt.offlinemusic'; compileSdk 35
- defaultConfig { applicationId 'com.mdt.offlinemusic'; minSdk 26; targetSdk 35; versionCode 8; versionName '1.7.0' }
+ defaultConfig { applicationId 'com.mdt.offlinemusic'; minSdk 26; targetSdk 35; versionCode 10; versionName '1.9.0' }
  def youtubeKey = (System.getenv("MDT_YOUTUBE_API_KEY") ?: "").replace("\\", "\\\\").replace("\"", "\\\"")
  defaultConfig { buildConfigField "String", "YOUTUBE_API_KEY", "\"${youtubeKey}\"" }
  buildFeatures { buildConfig true }
