@@ -1,6 +1,6 @@
 package com.mdt.offlinemusic;
 
-import com.yausername.youtubedl_android.YoutubeDL;import com.yausername.youtubedl_android.YoutubeDLRequest;import com.yausername.youtubedl_android.YoutubeDLException;import com.yausername.youtubedl_android.FFmpeg;
+import com.yausername.youtubedl_android.YoutubeDL;import com.yausername.youtubedl_android.YoutubeDLRequest;import com.yausername.youtubedl_android.YoutubeDLException;import com.yausername.ffmpeg.FFmpeg;
 import android.app.*;import android.os.*;import android.content.*;import android.database.*;import android.graphics.*;import android.graphics.drawable.*;import android.net.Uri;import android.provider.OpenableColumns;import android.text.*;import android.view.*;import android.view.inputmethod.*;import android.widget.*;import java.io.*;import java.security.*;import java.util.*;
 
 public class MainActivity extends Activity {
@@ -133,7 +133,7 @@ public class MainActivity extends Activity {
     request.addOption("--no-playlist");request.addOption("--no-overwrites");request.addOption("-f","bestaudio/best");
     request.addOption("-x");request.addOption("--audio-format","mp3");request.addOption("--audio-quality","2");
     request.addOption("-o",new File(tempDir,"audio.%(ext)s").getAbsolutePath());
-    YoutubeDL.getInstance().execute(request,(percent,eta)->runOnUiThread(()->{if(progress.isShowing())progress.setProgress(Math.max(0,Math.min(99,(int)percent)));}));
+    YoutubeDL.getInstance().execute(request,(percent,eta,line)->{runOnUiThread(()->{if(progress.isShowing())progress.setProgress(Math.max(0,Math.min(99,percent.intValue())));});return kotlin.Unit.INSTANCE;});
     File produced=new File(tempDir,"audio.mp3");
     if(!produced.isFile()||produced.length()==0)throw new IOException("Không nhận được file MP3; video có thể bị hạn chế.");
     if(produced.length()>150L*1024*1024)throw new IOException("File vượt 150 MB");

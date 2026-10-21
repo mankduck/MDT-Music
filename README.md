@@ -35,3 +35,10 @@ Dự án Android Studio **Java + Android SDK**, hoạt động hoàn toàn offli
 - Chuyển mục nhập playlist YouTube từ tab **Quản lý** sang **Cài đặt**.
 - Đồng bộ màu header/footer của hộp thoại kết quả playlist YouTube với giao diện sáng/tối, bỏ hai dải đen thừa.
 - Giữ nguyên cơ chế đọc playlist bằng URL, chưa tải MP3.
+
+
+## v2.0.1 – Sửa lỗi biên dịch
+- Sửa import FFmpeg thành `com.yausername.ffmpeg.FFmpeg`.
+- Sửa callback của YoutubeDL.execute thành 3 tham số và Kotlin Unit.
+- Giữ chức năng tải MP3 / lưu thumbnail đã có trong v2.0.0.
+- Chưa thể kiểm thử tải trực tiếp trên thiết bị, cần build GitHub Actions.
