@@ -4,7 +4,7 @@ import com.yausername.youtubedl_android.YoutubeDL;import com.yausername.youtubed
 import android.app.*;import android.os.*;import android.content.*;import android.database.*;import android.graphics.*;import android.graphics.drawable.*;import android.net.Uri;import android.provider.OpenableColumns;import android.text.*;import android.view.*;import android.view.inputmethod.*;import android.widget.*;import java.io.*;import java.security.*;import java.util.*;import java.util.zip.*;import org.json.*;
 
 public class MainActivity extends Activity {
- final int BG=0xFF0D1020,CARD=0xFF1A2034,PURPLE=0xFFB47AFF,WHITE=0xFFF4F4FA,MUTED=0xFF98A1B9;int tab=0; String managerSection="songs"; ArrayList<YoutubeItem> youtubePageItems=null; int managerPage=0; String managerQuery=""; boolean full=false;String openedAlbum=null;String query="",topic="Tất cả";MusicDb db;LinearLayout root,body,mini,nav;Handler handler=new Handler();MusicDb.Song editing;String pendingAudio="",pendingCover="";final int PICK_AUDIO=101,PICK_COVER=102,BACKUP_CREATE=201,BACKUP_OPEN=202;boolean dark=true;SharedPreferences prefs;boolean importing=false; boolean ytBusy=false; AlertDialog busyDialog; AlertDialog editorDialog; ImageView coverPreview;
+ final int BG=0xFF0D1020,CARD=0xFF1A2034,PURPLE=0xFFB47AFF,WHITE=0xFFF4F4FA,MUTED=0xFF98A1B9;int tab=0; String managerSection="songs"; ArrayList<YoutubeItem> youtubePageItems=null; int managerPage=0; String managerQuery=""; boolean full=false;String openedAlbum=null;String query="",topic="Tất cả";MusicDb db;LinearLayout root,body,mini,nav;Handler handler=new Handler();MusicDb.Song editing;String pendingAudio="",pendingCover="";final int PICK_AUDIO=101,PICK_COVER=102,BACKUP_CREATE=201,BACKUP_OPEN=202;boolean dark=true;String settingsSection="";SharedPreferences prefs;boolean importing=false; boolean ytBusy=false; AlertDialog busyDialog; AlertDialog editorDialog; ImageView coverPreview;
  BroadcastReceiver receiver=new BroadcastReceiver(){@Override public void onReceive(Context c,Intent i){updateMini();if(full)refreshPlayer();}};
  @Override public void onCreate(Bundle b){super.onCreate(b);getWindow().setStatusBarColor(BG);getWindow().setNavigationBarColor(BG);db=new MusicDb(this);prefs=getSharedPreferences("settings",MODE_PRIVATE);dark=prefs.getString("theme_mode",prefs.getBoolean("dark",false)?"dark":"light").equals("system")?systemDark():prefs.getString("theme_mode",prefs.getBoolean("dark",false)?"dark":"light").equals("dark");applySavedBrightness();if(Build.VERSION.SDK_INT>=33&&checkSelfPermission("android.permission.POST_NOTIFICATIONS")!=android.content.pm.PackageManager.PERMISSION_GRANTED)requestPermissions(new String[]{"android.permission.POST_NOTIFICATIONS"},7);if(prefs.contains("pin")){pinDialog();}else render();handler.postDelayed(new Runnable(){public void run(){if(full)refreshPlayer();else updateMini();handler.postDelayed(this,1000);}},1000);}
  @Override protected void onResume(){super.onResume();if(prefs!=null&&prefs.getString("theme_mode","light").equals("system")&&dark!=systemDark()){dark=systemDark();render();}if(Build.VERSION.SDK_INT>=33)registerReceiver(receiver,new IntentFilter(PlayerService.ACTION),Context.RECEIVER_NOT_EXPORTED);else registerReceiver(receiver,new IntentFilter(PlayerService.ACTION));}
@@ -33,16 +33,17 @@ public class MainActivity extends Activity {
  }
  int bg(){return dark?BG:0xFFF4F2FA;}int card(){return dark?CARD:0xFFFFFFFF;}
  int buttonColor(){return prefs==null?PURPLE:prefs.getInt("color_button",PURPLE);}
+ int buttonTextColor(){return prefs==null?WHITE:prefs.getInt("color_button_text",WHITE);}
  int ink(){return prefs==null?(dark?WHITE:0xFF202336):prefs.getInt("color_text_"+(dark?"dark":"light"),dark?WHITE:0xFF202336);}
  int pale(){return prefs==null?(dark?0xFF30354A:0xFFE1E3EA):prefs.getInt("color_pale_"+(dark?"dark":"light"),dark?0xFF30354A:0xFFE1E3EA);}
  int sub(){return dark?MUTED:0xFF697087;}
  GradientDrawable shape(int color,int radius){GradientDrawable d=new GradientDrawable();d.setColor(color);d.setCornerRadius(dp(radius));return d;}
  int dp(int v){return (int)(v*getResources().getDisplayMetrics().density+.5f);}LinearLayout vertical(){LinearLayout l=new LinearLayout(this);l.setOrientation(1);return l;}LinearLayout horizontal(){LinearLayout l=new LinearLayout(this);l.setOrientation(0);l.setGravity(Gravity.CENTER_VERTICAL);return l;}void pad(View v,int x,int y){v.setPadding(dp(x),dp(y),dp(x),dp(y));}
  TextView text(String s,int size,int color,boolean bold){TextView t=new TextView(this);t.setText(s==null?"":s);t.setTextSize(size);t.setTextColor(color);if(bold)t.setTypeface(null,1);t.setGravity(Gravity.CENTER_VERTICAL);return t;}
- TextView btn(String s,Runnable fn){TextView t=text(s,15,WHITE,true);t.setGravity(Gravity.CENTER);pad(t,14,12);t.setBackground(shape(buttonColor(),15));t.setOnClickListener(v->fn.run());return t;}
+ TextView btn(String s,Runnable fn){TextView t=text(s,15,buttonTextColor(),true);t.setGravity(Gravity.CENTER);pad(t,14,12);t.setBackground(shape(buttonColor(),15));t.setOnClickListener(v->fn.run());return t;}
  void title(LinearLayout l,String s,String subtitle){TextView h=text(s,27,ink(),true);l.addView(h);if(subtitle!=null){TextView t=text(subtitle,13,sub(),false);l.addView(t);}}
  void render(){openedAlbum=null;full=false;root=vertical();root.setBackgroundColor(bg());setSafeContentView();LinearLayout top=vertical();pad(top,20,16);root.addView(top);String[] names={"Khám phá","Thư viện","Quản lý","Cài đặt"};title(top,tab==0?"MDT MUSIC":tab==2?managerTitle():names[tab],tab==0?"YOUR MUSIC, YOUR WORLD":"Thư viện âm nhạc offline của bạn");ScrollView scroll=new ScrollView(this);scroll.setFillViewport(true);root.addView(scroll,new LinearLayout.LayoutParams(-1,0,1));body=vertical();pad(body,18,16);scroll.addView(body);if(tab==0)home();if(tab==1)library();if(tab==2)managerSectionPage();if(tab==3)settings();mini=horizontal();LinearLayout.LayoutParams miniParams=new LinearLayout.LayoutParams(-1,-2);miniParams.setMargins(dp(8),dp(7),dp(8),dp(7));root.addView(mini,miniParams);updateMini();addNavigation();}
- void addNavigation(){nav=horizontal();nav.setBackgroundColor(card());String[] names={"Khám phá","Thư viện","Quản lý","Cài đặt"};String[] icons={"⌂","♫","＋","⚙"};for(int i=0;i<4;i++){final int j=i;LinearLayout cell=vertical();cell.setGravity(Gravity.CENTER);TextView a=text(icons[i],26,i==tab?PURPLE:sub(),true);a.setGravity(Gravity.CENTER);cell.addView(a);TextView b=text(names[i],11,i==tab?PURPLE:sub(),true);b.setGravity(Gravity.CENTER);cell.addView(b);pad(cell,0,8);nav.addView(cell,new LinearLayout.LayoutParams(0,dp(62),1));cell.setOnClickListener(v->{if(j==2){showManagerMenu(cell);}else{tab=j;query="";render();}});}root.addView(nav);}
+ void addNavigation(){nav=horizontal();nav.setBackgroundColor(card());String[] names={"Khám phá","Thư viện","Quản lý","Cài đặt"};String[] icons={"⌂","♫","＋","⚙"};for(int i=0;i<4;i++){final int j=i;LinearLayout cell=vertical();cell.setGravity(Gravity.CENTER);TextView a=text(icons[i],26,i==tab?buttonColor():sub(),true);a.setGravity(Gravity.CENTER);cell.addView(a);TextView b=text(names[i],11,i==tab?buttonColor():sub(),true);b.setGravity(Gravity.CENTER);cell.addView(b);pad(cell,0,8);nav.addView(cell,new LinearLayout.LayoutParams(0,dp(62),1));cell.setOnClickListener(v->{if(j==2){showManagerMenu(cell);}else{tab=j;if(j!=3)settingsSection="";query="";render();}});}root.addView(nav);}
  String managerTitle(){switch(managerSection){case "albums":return "Quản lý danh sách phát";case "youtube":return "Playlist YouTube";case "trash":return "Danh sách đã xóa";default:return "Quản lý bài hát";}}
  void showManagerMenu(View anchor){
   LinearLayout menuPanel=vertical();pad(menuPanel,9,9);menuPanel.setBackground(shape(card(),18));
@@ -53,8 +54,8 @@ public class MainActivity extends Activity {
   popup.setBackgroundDrawable(shape(card(),18));popup.setElevation(dp(12));popup.setOutsideTouchable(true);
   for(int i=0;i<labels.length;i++){
    final int j=i;LinearLayout row=horizontal();pad(row,11,12);
-   if(ids[i].equals(managerSection))row.setBackground(shape(dark?0xFF343050:0xFFF0E4FF,12));
-   TextView ico=text(marks[i],19,PURPLE,true);ico.setGravity(Gravity.CENTER);row.addView(ico,new LinearLayout.LayoutParams(dp(32),dp(30)));
+   if(ids[i].equals(managerSection))row.setBackground(shape(pale(),12));
+   TextView ico=text(marks[i],19,buttonColor(),true);ico.setGravity(Gravity.CENTER);row.addView(ico,new LinearLayout.LayoutParams(dp(32),dp(30)));
    TextView label=text(labels[i],14,ink(),ids[i].equals(managerSection));row.addView(label,new LinearLayout.LayoutParams(0,-2,1));
    row.addView(text("›",20,sub(),false));menuPanel.addView(row);
    if(i<labels.length-1){View line=new View(this);line.setBackgroundColor(dark?0xFF30364D:0xFFE9E7F0);LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(-1,dp(1));lp.leftMargin=dp(10);lp.rightMargin=dp(10);menuPanel.addView(line,lp);}
@@ -63,7 +64,7 @@ public class MainActivity extends Activity {
   popup.showAtLocation(root,Gravity.BOTTOM|Gravity.RIGHT,dp(15),dp(82));
  }
  void managerSectionPage(){
-  if(!"songs".equals(managerSection)){TextView back=text("‹  Quay lại quản lý",14,PURPLE,true);pad(back,5,10);body.addView(back);back.setOnClickListener(v->{managerSection="songs";render();});space(body,10);}
+  if(!"songs".equals(managerSection)){TextView back=text("‹  Quay lại quản lý",14,buttonColor(),true);pad(back,5,10);body.addView(back);back.setOnClickListener(v->{managerSection="songs";render();});space(body,10);}
   switch(managerSection){case "albums":body.addView(btn("＋ Tạo / quản lý album",()->albumEditor()));space(body,14);for(String a:db.albums()){LinearLayout item=horizontal();pad(item,12,14);item.setBackground(shape(card(),12));item.addView(text(a,16,ink(),true),new LinearLayout.LayoutParams(0,-2,1));item.addView(btn("Chọn bài",()->chooseAlbumSongs(a)));body.addView(item);space(body,8);}break;
    case "youtube":youtubePlaylistPage();break;
    case "trash":deletedSongsScreen();break;
@@ -76,12 +77,12 @@ public class MainActivity extends Activity {
   space(body,16);if(youtubePageItems!=null)youtubeResults(youtubePageItems,"");
  }
  ArrayList<MusicDb.Song> songs(){return db.all();}
- void home(){ArrayList<MusicDb.Song> list=songs();TextView intro=text("♪  Giai điệu dành riêng cho bạn",18,PURPLE,true);pad(intro,12,18);intro.setBackground(shape(card(),20));body.addView(intro);space(body,22);title(body,"Albums", "Chọn album để xem các bài hát");space(body,12);LinkedHashMap<String,Integer> albums=new LinkedHashMap<>();for(String a:db.albums())albums.put(a,0);for(MusicDb.Song s:list){String a=empty(s.album)?"Chưa phân album":s.album;albums.put(a,albums.getOrDefault(a,0)+1);}if(albums.isEmpty())placeholder("Chưa có album. Hãy nhập nhạc từ trang Quản lý.");for(String a:albums.keySet()){LinearLayout tile=horizontal();pad(tile,14,15);tile.setBackground(shape(card(),16));TextView logo=text("◉",32,PURPLE,true);tile.addView(logo);LinearLayout info=vertical();pad(info,15,0);info.addView(text(a,17,ink(),true));info.addView(text(albums.get(a)+" bài hát",12,sub(),false));tile.addView(info,new LinearLayout.LayoutParams(0,-2,1));tile.addView(text("›",30,PURPLE,false));body.addView(tile);space(body,9);tile.setOnClickListener(v->album(a));}space(body,20);title(body,"Bài hát gần đây",null);space(body,10);for(int i=0;i<Math.min(list.size(),5);i++)songRow(body,list.get(i),list);}
+ void home(){ArrayList<MusicDb.Song> list=songs();TextView intro=text("♪  Giai điệu dành riêng cho bạn",18,buttonColor(),true);pad(intro,12,18);intro.setBackground(shape(card(),20));body.addView(intro);space(body,22);title(body,"Albums", "Chọn album để xem các bài hát");space(body,12);LinkedHashMap<String,Integer> albums=new LinkedHashMap<>();for(String a:db.albums())albums.put(a,0);for(MusicDb.Song s:list){String a=empty(s.album)?"Chưa phân album":s.album;albums.put(a,albums.getOrDefault(a,0)+1);}if(albums.isEmpty())placeholder("Chưa có album. Hãy nhập nhạc từ trang Quản lý.");for(String a:albums.keySet()){LinearLayout tile=horizontal();pad(tile,14,15);tile.setBackground(shape(card(),16));TextView logo=text("◉",32,buttonColor(),true);tile.addView(logo);LinearLayout info=vertical();pad(info,15,0);info.addView(text(a,17,ink(),true));info.addView(text(albums.get(a)+" bài hát",12,sub(),false));tile.addView(info,new LinearLayout.LayoutParams(0,-2,1));tile.addView(text("›",30,buttonColor(),false));body.addView(tile);space(body,9);tile.setOnClickListener(v->album(a));}space(body,20);title(body,"Bài hát gần đây",null);space(body,10);for(int i=0;i<Math.min(list.size(),5);i++)songRow(body,list.get(i),list);}
  void album(String name){openedAlbum=name;tab=0;full=false;root=vertical();root.setBackgroundColor(bg());setSafeContentView();ArrayList<MusicDb.Song> list=new ArrayList<>();for(MusicDb.Song s:songs())if((empty(s.album)?"Chưa phân album":s.album).equals(name))list.add(s);LinearLayout bar=horizontal();pad(bar,16,14);bar.addView(btn("‹",()->render()));TextView t=text("  ◉  "+name,21,ink(),true);t.setSingleLine(true);t.setEllipsize(android.text.TextUtils.TruncateAt.END);bar.addView(t,new LinearLayout.LayoutParams(0,-2,1));TextView all=btn("▶ Tất cả",()->{if(!list.isEmpty()){play(list.get(0),list);toast("Đang phát "+list.size()+" bài trong album "+name);}else toast("Album chưa có bài hát");});bar.addView(all);root.addView(bar);ScrollView scroll=new ScrollView(this);root.addView(scroll,new LinearLayout.LayoutParams(-1,0,1));LinearLayout content=vertical();pad(content,18,12);scroll.addView(content);if(list.isEmpty())content.addView(text("Album chưa có bài hát",14,sub(),false));for(MusicDb.Song s:list)songRow(content,s,list);mini=horizontal();LinearLayout.LayoutParams miniParams=new LinearLayout.LayoutParams(-1,-2);miniParams.setMargins(dp(8),dp(7),dp(8),dp(7));root.addView(mini,miniParams);updateMini();addNavigation();}
 
- void library(){EditText search=edit("⌕  Tìm tên bài hát, ca sĩ...");search.setSingleLine(true);search.setText(query);body.addView(search);search.addTextChangedListener(new TextWatcher(){public void beforeTextChanged(CharSequence s,int st,int c,int a){}public void onTextChanged(CharSequence s,int st,int before,int count){query=s.toString();populateLibrary();}public void afterTextChanged(Editable e){}});space(body,10);HorizontalScrollView hs=new HorizontalScrollView(this);hs.setHorizontalScrollBarEnabled(false);LinearLayout filters=horizontal();hs.addView(filters);ArrayList<String> topics=new ArrayList<>();topics.add("Tất cả");for(MusicDb.Song s:songs())if(!empty(s.topic)&&!topics.contains(s.topic))topics.add(s.topic);for(String x:topics){TextView chip=text(x,13,WHITE,false);pad(chip,15,10);chip.setBackground(shape(x.equals(topic)?PURPLE:card(),22));LinearLayout.LayoutParams cp=new LinearLayout.LayoutParams(-2,-2);cp.rightMargin=dp(8);filters.addView(chip,cp);chip.setOnClickListener(v->{topic=x;render();});}body.addView(hs);space(body,15);libraryList=vertical();body.addView(libraryList);populateLibrary();}
+ void library(){EditText search=edit("⌕  Tìm tên bài hát, ca sĩ...");search.setSingleLine(true);search.setText(query);body.addView(search);search.addTextChangedListener(new TextWatcher(){public void beforeTextChanged(CharSequence s,int st,int c,int a){}public void onTextChanged(CharSequence s,int st,int before,int count){query=s.toString();populateLibrary();}public void afterTextChanged(Editable e){}});space(body,10);HorizontalScrollView hs=new HorizontalScrollView(this);hs.setHorizontalScrollBarEnabled(false);LinearLayout filters=horizontal();hs.addView(filters);ArrayList<String> topics=new ArrayList<>();topics.add("Tất cả");for(MusicDb.Song s:songs())if(!empty(s.topic)&&!topics.contains(s.topic))topics.add(s.topic);for(String x:topics){TextView chip=text(x,13,x.equals(topic)?buttonTextColor():ink(),false);pad(chip,15,10);chip.setBackground(shape(x.equals(topic)?buttonColor():card(),22));LinearLayout.LayoutParams cp=new LinearLayout.LayoutParams(-2,-2);cp.rightMargin=dp(8);filters.addView(chip,cp);chip.setOnClickListener(v->{topic=x;render();});}body.addView(hs);space(body,15);libraryList=vertical();body.addView(libraryList);populateLibrary();}
  LinearLayout libraryList;void populateLibrary(){if(libraryList==null||tab!=1)return;libraryList.removeAllViews();ArrayList<MusicDb.Song> filtered=new ArrayList<>();for(MusicDb.Song s:songs()){boolean match=(s.title+" "+s.artist+" "+s.album).toLowerCase().contains(query.toLowerCase());if(match&&(topic.equals("Tất cả")||topic.equals(s.topic)))filtered.add(s);}if(filtered.isEmpty()){TextView t=text("Không tìm thấy bài hát",15,sub(),false);pad(t,10,22);libraryList.addView(t);}else for(MusicDb.Song s:filtered)songRow(libraryList,s,filtered);}
- void songRow(LinearLayout target,MusicDb.Song s,ArrayList<MusicDb.Song> queue){LinearLayout tile=horizontal();pad(tile,10,11);TextView art=text("♫",26,PURPLE,true);art.setGravity(Gravity.CENTER);art.setBackground(shape(card(),13));tile.addView(art,new LinearLayout.LayoutParams(dp(52),dp(52)));if(!empty(s.cover)){Bitmap bmp=loadBitmap(s.cover);if(bmp!=null){ImageView iv=new ImageView(this);iv.setImageBitmap(bmp);iv.setScaleType(ImageView.ScaleType.CENTER_CROP);iv.setBackground(shape(card(),12));tile.removeView(art);tile.addView(iv,new LinearLayout.LayoutParams(dp(52),dp(52)));}}LinearLayout info=vertical();pad(info,12,0);info.addView(text(s.title,16,ink(),true));info.addView(text(empty(s.artist)?"Không rõ nghệ sĩ":s.artist,12,sub(),false));tile.addView(info,new LinearLayout.LayoutParams(0,-2,1));tile.addView(text("▶",18,PURPLE,true));target.addView(tile);space(target,5);tile.setOnClickListener(v->{play(s,queue);});}
+ void songRow(LinearLayout target,MusicDb.Song s,ArrayList<MusicDb.Song> queue){LinearLayout tile=horizontal();pad(tile,10,11);TextView art=text("♫",26,buttonColor(),true);art.setGravity(Gravity.CENTER);art.setBackground(shape(card(),13));tile.addView(art,new LinearLayout.LayoutParams(dp(52),dp(52)));if(!empty(s.cover)){Bitmap bmp=loadBitmap(s.cover);if(bmp!=null){ImageView iv=new ImageView(this);iv.setImageBitmap(bmp);iv.setScaleType(ImageView.ScaleType.CENTER_CROP);iv.setBackground(shape(card(),12));tile.removeView(art);tile.addView(iv,new LinearLayout.LayoutParams(dp(52),dp(52)));}}LinearLayout info=vertical();pad(info,12,0);info.addView(text(s.title,16,ink(),true));info.addView(text(empty(s.artist)?"Không rõ nghệ sĩ":s.artist,12,sub(),false));tile.addView(info,new LinearLayout.LayoutParams(0,-2,1));tile.addView(text("▶",18,buttonColor(),true));target.addView(tile);space(target,5);tile.setOnClickListener(v->{play(s,queue);});}
  void play(MusicDb.Song s,ArrayList<MusicDb.Song> list){ArrayList<Long> ids=new ArrayList<>();for(MusicDb.Song x:list)ids.add(x.id);Intent start=new Intent(this,PlayerService.class).setAction("PLAY").putExtra("id",s.id);start.putExtra("queue",ids);try{startForegroundService(start);}catch(Exception ex){toast("Không thể khởi động trình phát: "+ex.getMessage());}handler.postDelayed(()->updateMini(),400);}
  void updateMini(){if(mini==null)return;mini.removeAllViews();PlayerService p=PlayerService.instance;if(p==null||p.song==null){mini.setVisibility(View.GONE);return;}
  mini.setVisibility(View.VISIBLE);mini.setBackground(shape(dark?0xFF292D40:0xFFE6E8EF,15));mini.setPadding(dp(14),dp(11),dp(10),dp(9));
@@ -142,7 +143,7 @@ public class MainActivity extends Activity {
   TextView hint=text("Chọn video rồi bấm Tải MP3. Ứng dụng sẽ thử lấy âm thanh và lưu offline vào thư viện chung; một số video có thể không hỗ trợ tải.",12,sub(),false);content.addView(hint);space(content,9);
   LinkedHashSet<String> picked=new LinkedHashSet<>();
   LinearLayout selectedBar=horizontal();CheckBox all=new CheckBox(this);all.setText("Chọn tất cả");all.setTextColor(ink());selectedBar.addView(all,new LinearLayout.LayoutParams(0,-2,1));
-  TextView importButton=btn("Tải MP3",()->{});styleSmallButton(importButton,PURPLE);selectedBar.addView(importButton);content.addView(selectedBar);
+  TextView importButton=btn("Tải MP3",()->{});styleSmallButton(importButton,buttonColor());selectedBar.addView(importButton);content.addView(selectedBar);
   LinearLayout results=vertical();content.addView(results);
   Runnable[] fill=new Runnable[1]; fill[0]=()->{results.removeAllViews();String q=search.getText().toString().toLowerCase(java.util.Locale.ROOT);for(YoutubeItem item:items){if(!(item.title+" "+item.channel).toLowerCase(java.util.Locale.ROOT).contains(q))continue;
    LinearLayout row=horizontal();pad(row,9,10);row.setBackground(shape(card(),12));CheckBox cb=new CheckBox(this);cb.setButtonTintList(android.content.res.ColorStateList.valueOf(buttonColor()));cb.setChecked(picked.contains(item.videoId));row.addView(cb);
@@ -301,7 +302,7 @@ public class MainActivity extends Activity {
   next.setEnabled(managerPage<totalPages-1);next.setAlpha(managerPage<totalPages-1?1f:.35f);controls.addView(next);
   target.addView(controls);
  }
- void styleSmallButton(TextView v,int color){v.setTextSize(12);v.setPadding(dp(9),dp(11),dp(9),dp(11));v.setBackground(shape(color,10));}
+ void styleSmallButton(TextView v,int color){if(color==buttonColor())v.setTextColor(buttonTextColor());v.setTextSize(12);v.setPadding(dp(9),dp(11),dp(9),dp(11));v.setBackground(shape(color,10));}
  void confirmSoftDelete(MusicDb.Song s){new AlertDialog.Builder(this).setTitle("Chuyển vào Bài hát đã xóa?").setMessage(s.title+"\nBạn có thể khôi phục trong Cài đặt. File MP3 chưa bị xóa.").setNegativeButton("Hủy",null).setPositiveButton("Xóa",(d,w)->{
   PlayerService p=PlayerService.instance;
   if(p!=null&&p.song!=null&&p.song.id==s.id){stopService(new Intent(this,PlayerService.class));}
@@ -330,7 +331,7 @@ public class MainActivity extends Activity {
    CheckBox cb=new CheckBox(this);cb.setButtonTintList(android.content.res.ColorStateList.valueOf(buttonColor()));boxes.add(cb);row.addView(cb,new LinearLayout.LayoutParams(dp(53),-2));
    LinearLayout info=vertical();TextView name=text(song.title,13,ink(),true);name.setMaxLines(3);info.addView(name);
    info.addView(text(empty(song.artist)?"Chưa có nghệ sĩ":song.artist,11,sub(),false));row.addView(info,new LinearLayout.LayoutParams(0,-2,1));
-   TextView recover=text("Khôi phục",11,PURPLE,true);pad(recover,6,9);row.addView(recover);
+   TextView recover=text("Khôi phục",11,buttonColor(),true);pad(recover,6,9);row.addView(recover);
    recover.setOnClickListener(v->{LinkedHashSet<Long> one=new LinkedHashSet<>();one.add(song.id);db.restore(one);render();toast("Đã khôi phục bài hát");});
    cb.setOnCheckedChangeListener((button,on)->{if(on)selected.add(song.id);else selected.remove(song.id);update.run();});
    table.addView(row);space(table,5);
@@ -348,28 +349,52 @@ public class MainActivity extends Activity {
  ScrollView wrapScroll(View child){ScrollView s=new ScrollView(this);s.addView(child);return s;}
  void deleteOwnedFile(String path){if(empty(path))return;try{File f=new File(path).getCanonicalFile();File root=getFilesDir().getCanonicalFile();if(f.getPath().startsWith(root.getPath()+File.separator))f.delete();}catch(Exception ignored){}}
  void settings(){
-  settingsHeader("Giao diện & màu sắc");
+  if(settingsSection.isEmpty()){
+   String[] names={"Giao diện & hiển thị","Phát nhạc","Bộ nhớ & dữ liệu","Bảo mật","Ngôn ngữ","Thông tin ứng dụng"};
+   String[] descriptions={"Sáng / Tối / Theo hệ thống, màu sắc, độ sáng","Tốc độ phát mặc định, phát tiếp, hẹn giờ","Dung lượng nhạc, sao lưu, khôi phục thư viện","Mã PIN, bảo vệ ứng dụng","Tiếng Việt / English","Phiên bản, nhật ký cập nhật"};
+   String[] icons={"◉","♫","▣","♢","文","ⓘ"};
+   LinearLayout group=vertical();group.setBackground(shape(card(),16));pad(group,10,3);body.addView(group);
+   for(int n=0;n<names.length;n++){final int index=n;LinearLayout row=horizontal();pad(row,10,16);
+    TextView symbol=text(icons[n],20,buttonColor(),true);row.addView(symbol,new LinearLayout.LayoutParams(dp(35),dp(38)));
+    LinearLayout words=vertical();words.addView(text(names[n],15,ink(),true));words.addView(text(descriptions[n],11,sub(),false));row.addView(words,new LinearLayout.LayoutParams(0,-2,1));row.addView(text("›",23,sub(),false));group.addView(row);
+    row.setOnClickListener(v->{settingsSection=new String[]{"appearance","playback","storage","security","language","about"}[index];render();});
+    if(n<names.length-1){View divider=new View(this);divider.setBackgroundColor(pale());group.addView(divider,new LinearLayout.LayoutParams(-1,dp(1)));}
+   }
+   return;
+  }
+  TextView back=text("‹  Quay lại cài đặt",14,buttonColor(),true);pad(back,5,10);body.addView(back);back.setOnClickListener(v->{settingsSection="";render();});space(body,15);
+  switch(settingsSection){
+   case "appearance":
+    settingsHeader("Giao diện & hiển thị");
   body.addView(btn("Chế độ giao diện: "+prefs.getString("theme_mode","light"),()->{String[] modes={"Sáng","Tối","Theo hệ thống"};new AlertDialog.Builder(this).setTitle("Chọn giao diện").setItems(modes,(d,which)->{String mode=which==0?"light":which==1?"dark":"system";prefs.edit().putString("theme_mode",mode).apply();dark=mode.equals("system")?systemDark():mode.equals("dark");render();}).show();}));
-  space(body,10);body.addView(text("Tùy chỉnh màu chủ đạo",15,ink(),true));space(body,7);
-  colorSetting("Màu nút", "color_button",buttonColor());
-  colorSetting("Màu chữ", "color_text_"+(dark?"dark":"light"),ink());
-  colorSetting("Màu nhạt (popup, dòng xen kẽ)", "color_pale_"+(dark?"dark":"light"),pale());
-  body.addView(btn("Khôi phục màu mặc định",()->{prefs.edit().remove("color_button").remove("color_text_light").remove("color_text_dark").remove("color_pale_light").remove("color_pale_dark").apply();render();}));space(body,17);
+
+    space(body,12);settingsHeader("Bảng màu cá nhân");
+    colorSetting("Màu nút và điểm nhấn", "color_button",buttonColor());
+    colorSetting("Màu chữ trên nút", "color_button_text",buttonTextColor());
+    colorSetting("Màu chữ nội dung", "color_text_"+(dark?"dark":"light"),ink());
+    colorSetting("Màu nhạt (popup, dòng so le)", "color_pale_"+(dark?"dark":"light"),pale());
+    body.addView(btn("Khôi phục màu mặc định",()->{prefs.edit().remove("color_button").remove("color_button_text").remove("color_text_light").remove("color_text_dark").remove("color_pale_light").remove("color_pale_dark").apply();render();}));space(body,17);
   body.addView(text("Độ sáng trong ứng dụng",16,ink(),true));space(body,6);
   boolean systemBrightness=prefs.getInt("brightness",-1)<0;
   CheckBox systemMode=new CheckBox(this);systemMode.setText("Theo độ sáng điện thoại (mặc định)");systemMode.setTextColor(ink());systemMode.setChecked(systemBrightness);body.addView(systemMode);
   SeekBar bright=new SeekBar(this);bright.setMax(100);bright.setProgress(systemBrightness?50:prefs.getInt("brightness",50));bright.setEnabled(!systemBrightness);bright.setAlpha(systemBrightness?.40f:1f);body.addView(bright);
   systemMode.setOnCheckedChangeListener((button,checked)->{bright.setEnabled(!checked);bright.setAlpha(checked?.40f:1f);prefs.edit().putInt("brightness",checked?-1:bright.getProgress()).apply();applySavedBrightness();});
   bright.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener(){public void onProgressChanged(SeekBar b,int value,boolean user){if(user&&!systemMode.isChecked()){prefs.edit().putInt("brightness",value).apply();applySavedBrightness();}}public void onStartTrackingTouch(SeekBar b){}public void onStopTrackingTouch(SeekBar b){}});
-  space(body,17);settingsHeader("Phát nhạc");body.addView(text("Tốc độ phát mặc định: tùy chỉnh trong màn hình Đang phát",13,sub(),false));space(body,17);
-  settingsHeader("Bộ nhớ & dữ liệu");
+
+    break;
+   case "playback":settingsHeader("Phát nhạc");body.addView(text("Tốc độ phát: tùy chỉnh trong màn hình Đang phát. Hẹn giờ và chế độ lặp cũng nằm tại màn hình này.",14,sub(),false));break;
+   case "storage":settingsHeader("Bộ nhớ & dữ liệu");
   body.addView(text("Thư viện: "+(db.all().size()+db.deletedSongs().size())+" bài · "+libraryBytes()/1048576+" MB file local",13,sub(),false));space(body,8);
   body.addView(btn("Sao lưu thư viện ra ZIP",()->{Intent i=new Intent(Intent.ACTION_CREATE_DOCUMENT);i.addCategory(Intent.CATEGORY_OPENABLE);i.setType("application/zip");i.putExtra(Intent.EXTRA_TITLE,"MDT-Music-Backup.zip");startActivityForResult(i,BACKUP_CREATE);}));space(body,8);
   body.addView(btn("Khôi phục thư viện từ ZIP",()->{new AlertDialog.Builder(this).setTitle("Khôi phục thư viện").setMessage("Các bài trong ZIP sẽ được nhập thêm vào thư viện hiện tại; không xóa những bài đang có. Chỉ dùng ZIP sao lưu do MDT Music tạo.").setNegativeButton("Hủy",null).setPositiveButton("Chọn ZIP",(d,w)->{Intent i=new Intent(Intent.ACTION_OPEN_DOCUMENT);i.addCategory(Intent.CATEGORY_OPENABLE);i.setType("application/zip");startActivityForResult(i,BACKUP_OPEN);}).show();}));space(body,17);
-  settingsHeader("Bảo mật");body.addView(btn(prefs.contains("pin")?"Đổi / tắt mã PIN":"Thiết lập mã PIN",()->pinSettings()));space(body,17);
-  settingsHeader("Ngôn ngữ");body.addView(text("Tiếng Việt (English dự kiến ở bản sau)",13,sub(),false));space(body,17);
-  settingsHeader("Thông tin ứng dụng");body.addView(text("MDT Music • Phiên bản v2.4.0",13,sub(),false));
+
+    break;
+   case "security":settingsHeader("Bảo mật");body.addView(btn(prefs.contains("pin")?"Đổi / tắt mã PIN":"Thiết lập mã PIN",()->pinSettings()));break;
+   case "language":settingsHeader("Ngôn ngữ");body.addView(text("Tiếng Việt (English chưa triển khai)",14,sub(),false));break;
+   case "about":settingsHeader("Thông tin ứng dụng");body.addView(text("MDT Music • Phiên bản v2.4.1",14,sub(),false));break;
+  }
  }
+
  boolean systemDark(){return (getResources().getConfiguration().uiMode & android.content.res.Configuration.UI_MODE_NIGHT_MASK)==android.content.res.Configuration.UI_MODE_NIGHT_YES;}
  void settingsHeader(String name){TextView v=text(name,20,ink(),true);body.addView(v);space(body,10);}
  void colorSetting(String label,String key,int current){LinearLayout row=horizontal();pad(row,10,10);row.setBackground(shape(card(),12));TextView title=text(label,14,ink(),true);row.addView(title,new LinearLayout.LayoutParams(0,-2,1));View swatch=new View(this);swatch.setBackground(shape(current,10));row.addView(swatch,new LinearLayout.LayoutParams(dp(32),dp(32)));body.addView(row);space(body,8);row.setOnClickListener(v->chooseColor(key,label));}
