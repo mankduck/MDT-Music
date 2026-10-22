@@ -35,10 +35,22 @@ public class MainActivity extends Activity {
  void addNavigation(){nav=horizontal();nav.setBackgroundColor(card());String[] names={"Khám phá","Thư viện","Quản lý","Cài đặt"};String[] icons={"⌂","♫","＋","⚙"};for(int i=0;i<4;i++){final int j=i;LinearLayout cell=vertical();cell.setGravity(Gravity.CENTER);TextView a=text(icons[i],26,i==tab?PURPLE:sub(),true);a.setGravity(Gravity.CENTER);cell.addView(a);TextView b=text(names[i],11,i==tab?PURPLE:sub(),true);b.setGravity(Gravity.CENTER);cell.addView(b);pad(cell,0,8);nav.addView(cell,new LinearLayout.LayoutParams(0,dp(62),1));cell.setOnClickListener(v->{if(j==2){showManagerMenu(cell);}else{tab=j;query="";render();}});}root.addView(nav);}
  String managerTitle(){switch(managerSection){case "albums":return "Quản lý danh sách phát";case "youtube":return "Playlist YouTube";case "trash":return "Danh sách đã xóa";default:return "Quản lý bài hát";}}
  void showManagerMenu(View anchor){
-  PopupMenu menu=new PopupMenu(this,anchor);
+  LinearLayout menuPanel=vertical();pad(menuPanel,9,9);menuPanel.setBackground(shape(card(),18));
   String[] labels={"Quản lý danh sách bài hát","Quản lý danh sách phát","Nhập playlist YouTube","Danh sách đã xóa"};
-  for(int i=0;i<labels.length;i++)menu.getMenu().add(0,i,i,labels[i]);
-  menu.setOnMenuItemClickListener(item->{String[] ids={"songs","albums","youtube","trash"};managerSection=ids[item.getItemId()];tab=2;render();return true;});menu.show();
+  String[] marks={"♫","▤","▶","♻"};
+  String[] ids={"songs","albums","youtube","trash"};
+  final PopupWindow popup=new PopupWindow(menuPanel,dp(268),-2,true);
+  popup.setBackgroundDrawable(shape(card(),18));popup.setElevation(dp(12));popup.setOutsideTouchable(true);
+  for(int i=0;i<labels.length;i++){
+   final int j=i;LinearLayout row=horizontal();pad(row,11,12);
+   if(ids[i].equals(managerSection))row.setBackground(shape(dark?0xFF343050:0xFFF0E4FF,12));
+   TextView ico=text(marks[i],19,PURPLE,true);ico.setGravity(Gravity.CENTER);row.addView(ico,new LinearLayout.LayoutParams(dp(32),dp(30)));
+   TextView label=text(labels[i],14,ink(),ids[i].equals(managerSection));row.addView(label,new LinearLayout.LayoutParams(0,-2,1));
+   row.addView(text("›",20,sub(),false));menuPanel.addView(row);
+   if(i<labels.length-1){View line=new View(this);line.setBackgroundColor(dark?0xFF30364D:0xFFE9E7F0);LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(-1,dp(1));lp.leftMargin=dp(10);lp.rightMargin=dp(10);menuPanel.addView(line,lp);}
+   row.setOnClickListener(v->{popup.dismiss();managerSection=ids[j];tab=2;render();});
+  }
+  popup.showAtLocation(root,Gravity.BOTTOM|Gravity.RIGHT,dp(15),dp(82));
  }
  void managerSectionPage(){
   if(!"songs".equals(managerSection)){TextView back=text("‹  Quay lại quản lý",14,PURPLE,true);pad(back,5,10);body.addView(back);back.setOnClickListener(v->{managerSection="songs";render();});space(body,10);}
@@ -121,7 +133,7 @@ public class MainActivity extends Activity {
   LinkedHashSet<String> picked=new LinkedHashSet<>();
   LinearLayout selectedBar=horizontal();CheckBox all=new CheckBox(this);all.setText("Chọn tất cả");all.setTextColor(ink());selectedBar.addView(all,new LinearLayout.LayoutParams(0,-2,1));
   TextView importButton=btn("Tải MP3",()->{});styleSmallButton(importButton,PURPLE);selectedBar.addView(importButton);content.addView(selectedBar);
-  ScrollView scroll=new ScrollView(this);LinearLayout results=vertical();scroll.addView(results);content.addView(scroll,new LinearLayout.LayoutParams(-1,dp(310)));
+  LinearLayout results=vertical();content.addView(results);
   Runnable[] fill=new Runnable[1]; fill[0]=()->{results.removeAllViews();String q=search.getText().toString().toLowerCase(java.util.Locale.ROOT);for(YoutubeItem item:items){if(!(item.title+" "+item.channel).toLowerCase(java.util.Locale.ROOT).contains(q))continue;
    LinearLayout row=horizontal();pad(row,9,10);row.setBackground(shape(card(),12));CheckBox cb=new CheckBox(this);cb.setButtonTintList(android.content.res.ColorStateList.valueOf(PURPLE));cb.setChecked(picked.contains(item.videoId));row.addView(cb);
    LinearLayout desc=vertical();desc.addView(text(item.title,14,ink(),true));desc.addView(text(item.channel,12,sub(),false));row.addView(desc,new LinearLayout.LayoutParams(0,-2,1));results.addView(row);space(results,6);
@@ -285,38 +297,47 @@ public class MainActivity extends Activity {
   if(p!=null&&p.song!=null&&p.song.id==s.id){stopService(new Intent(this,PlayerService.class));}
   db.softDelete(s.id);render();toast("Đã chuyển vào Bài hát đã xóa");
  }).show();}
- void deletedSongsScreen(){ArrayList<MusicDb.Song> removed=db.deletedSongs();LinkedHashSet<Long> selected=new LinkedHashSet<>();
-  LinearLayout layout=vertical();layout.setBackgroundColor(bg());pad(layout,14,12);
-  LinearLayout toolbar=horizontal();pad(toolbar,8,8);toolbar.setBackground(shape(dark?0xFF30354A:0xFFE1E3EA,12));
-  CheckBox selectAll=new CheckBox(this);selectAll.setText("Chọn hết");selectAll.setTextSize(12);selectAll.setTextColor(ink());toolbar.addView(selectAll,new LinearLayout.LayoutParams(0,-2,1));
-  TextView restore=btn("Khôi phục tất cả",()->{}),erase=btn("Xóa tất cả",()->{});
-  styleSmallButton(restore,PURPLE);styleSmallButton(erase,0xFFB94D61);toolbar.addView(restore);spaceW(toolbar,6);toolbar.addView(erase);
-  layout.addView(toolbar);space(layout,14);
-  LinearLayout entries=vertical();layout.addView(entries);
+ void deletedSongsScreen(){
+  ArrayList<MusicDb.Song> removed=db.deletedSongs();LinkedHashSet<Long> selected=new LinkedHashSet<>();
+  body.addView(text("Bài hát đã xóa ("+removed.size()+")",20,ink(),true));space(body,12);
+  LinearLayout toolbar=horizontal();pad(toolbar,8,10);toolbar.setBackground(shape(dark?0xFF30354A:0xFFE2E4EC,13));
+  CheckBox selectAll=new CheckBox(this);selectAll.setText("Chọn hết");selectAll.setTextSize(12);selectAll.setTextColor(ink());selectAll.setButtonTintList(android.content.res.ColorStateList.valueOf(PURPLE));
+  toolbar.addView(selectAll,new LinearLayout.LayoutParams(0,-2,1));
+  TextView restore=btn("Khôi phục",()->{}),erase=btn("Xóa",()->{});
+  styleSmallButton(restore,PURPLE);styleSmallButton(erase,0xFFB94D61);toolbar.addView(restore);spaceW(toolbar,5);toolbar.addView(erase);
+  body.addView(toolbar);space(body,12);
+  LinearLayout table=vertical();body.addView(table);
+  LinearLayout heading=horizontal();pad(heading,8,12);heading.setBackground(shape(dark?0xFF30354A:0xFFE2E4EC,11));
+  heading.addView(text("Chọn",12,ink(),true),new LinearLayout.LayoutParams(dp(53),-2));
+  heading.addView(text("Bài hát / Nghệ sĩ",12,ink(),true),new LinearLayout.LayoutParams(0,-2,1));
+  heading.addView(text("Thao tác",12,ink(),true));table.addView(heading);space(table,5);
+  ArrayList<CheckBox> boxes=new ArrayList<>();
   Runnable update=()->{boolean enabled=!selected.isEmpty();restore.setEnabled(enabled);erase.setEnabled(enabled);restore.setAlpha(enabled?1f:.35f);erase.setAlpha(enabled?1f:.35f);};
-  selectAll.setOnCheckedChangeListener((b,yes)->{selected.clear();if(yes)for(MusicDb.Song song:removed)selected.add(song.id);for(int i=0;i<entries.getChildCount();i++){View row=entries.getChildAt(i);if(row instanceof LinearLayout){LinearLayout r=(LinearLayout)row;View v=r.getChildAt(0);if(v instanceof CheckBox)((CheckBox)v).setChecked(yes);}}update.run();});
-  if(removed.isEmpty()){TextView no=text("Chưa có bài hát nào bị xóa.",14,sub(),false);pad(no,12,16);entries.addView(no);selectAll.setEnabled(false);}
-  for(int ix=0;ix<removed.size();ix++){MusicDb.Song song=removed.get(ix);
-   LinearLayout row=horizontal();pad(row,7,11);row.setBackground(shape(ix%2==0?card():(dark?0xFF22283C:0xFFECEEF4),9));
-   CheckBox cb=new CheckBox(this);cb.setButtonTintList(android.content.res.ColorStateList.valueOf(PURPLE));row.addView(cb);
-   LinearLayout info=vertical();TextView name=text(song.title,14,ink(),true);name.setMaxLines(2);info.addView(name);info.addView(text(empty(song.artist)?"Chưa có nghệ sĩ":song.artist,12,sub(),false));row.addView(info,new LinearLayout.LayoutParams(0,-2,1));
-   cb.setOnCheckedChangeListener((b,checked)->{if(checked)selected.add(song.id);else selected.remove(song.id);update.run();});
-   entries.addView(row);space(entries,5);
+  if(removed.isEmpty()){TextView no=text("Chưa có bài hát nào bị xóa.",14,sub(),false);pad(no,14,20);table.addView(no);selectAll.setEnabled(false);}
+  for(int i=0;i<removed.size();i++){
+   MusicDb.Song song=removed.get(i);LinearLayout row=horizontal();pad(row,7,12);
+   row.setBackground(shape(i%2==0?card():(dark?0xFF232A3E:0xFFEAEBF3),11));
+   CheckBox cb=new CheckBox(this);cb.setButtonTintList(android.content.res.ColorStateList.valueOf(PURPLE));boxes.add(cb);row.addView(cb,new LinearLayout.LayoutParams(dp(53),-2));
+   LinearLayout info=vertical();TextView name=text(song.title,13,ink(),true);name.setMaxLines(3);info.addView(name);
+   info.addView(text(empty(song.artist)?"Chưa có nghệ sĩ":song.artist,11,sub(),false));row.addView(info,new LinearLayout.LayoutParams(0,-2,1));
+   TextView recover=text("Khôi phục",11,PURPLE,true);pad(recover,6,9);row.addView(recover);
+   recover.setOnClickListener(v->{LinkedHashSet<Long> one=new LinkedHashSet<>();one.add(song.id);db.restore(one);render();toast("Đã khôi phục bài hát");});
+   cb.setOnCheckedChangeListener((button,on)->{if(on)selected.add(song.id);else selected.remove(song.id);update.run();});
+   table.addView(row);space(table,5);
   }
-  update.run();
-  body.addView(text("Bài hát đã xóa ("+removed.size()+")",20,ink(),true));space(body,10);
-  body.addView(layout);
+  selectAll.setOnCheckedChangeListener((button,on)->{if(on&&selected.size()==removed.size())return;if(!on&&selected.isEmpty())return;
+   for(CheckBox cb:boxes)cb.setChecked(on);update.run();});update.run();
   restore.setOnClickListener(v->{if(selected.isEmpty())return;int count=selected.size();db.restore(selected);render();toast("Đã khôi phục "+count+" bài hát");});
-  erase.setOnClickListener(v->{if(selected.isEmpty())return;new AlertDialog.Builder(this).setTitle("Xóa vĩnh viễn?").setMessage("Xóa "+selected.size()+" bài hát và file MP3 trong vùng riêng của ứng dụng? Không thể khôi phục.").setNegativeButton("Hủy",null).setPositiveButton("Xóa vĩnh viễn",(d,w)->{
-    ArrayList<MusicDb.Song> toDelete=new ArrayList<>();for(MusicDb.Song song:removed)if(selected.contains(song.id))toDelete.add(song);
-    db.permanentDelete(selected);
-    for(MusicDb.Song song:toDelete){deleteOwnedFile(song.path);deleteOwnedFile(song.cover);}
-    render();toast("Đã xóa vĩnh viễn "+toDelete.size()+" bài hát");
-   }).show();});
+  erase.setOnClickListener(v->{if(selected.isEmpty())return;new AlertDialog.Builder(this).setTitle("Xóa vĩnh viễn?")
+    .setMessage("Xóa "+selected.size()+" bài hát và file MP3 trong vùng riêng của ứng dụng? Không thể khôi phục.")
+    .setNegativeButton("Hủy",null).setPositiveButton("Xóa vĩnh viễn",(d,w)->{
+      ArrayList<MusicDb.Song> toDelete=new ArrayList<>();for(MusicDb.Song song:removed)if(selected.contains(song.id))toDelete.add(song);
+      db.permanentDelete(selected);for(MusicDb.Song song:toDelete){deleteOwnedFile(song.path);deleteOwnedFile(song.cover);}
+      render();toast("Đã xóa vĩnh viễn "+toDelete.size()+" bài hát");}).show();});
  }
  ScrollView wrapScroll(View child){ScrollView s=new ScrollView(this);s.addView(child);return s;}
  void deleteOwnedFile(String path){if(empty(path))return;try{File f=new File(path).getCanonicalFile();File root=getFilesDir().getCanonicalFile();if(f.getPath().startsWith(root.getPath()+File.separator))f.delete();}catch(Exception ignored){}}
- void settings(){settingsRow("Giao diện tối",dark,checked->{dark=checked;prefs.edit().putBoolean("dark",checked).apply();render();});space(body,12);body.addView(text("Độ sáng trong ứng dụng",16,ink(),true));SeekBar bright=new SeekBar(this);bright.setMax(100);bright.setProgress(prefs.getInt("brightness",100));bright.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener(){public void onProgressChanged(SeekBar b,int progress,boolean u){if(u){float f=Math.max(.1f,progress/100f);getWindow().getAttributes().screenBrightness=f;android.view.WindowManager.LayoutParams lp=getWindow().getAttributes();lp.screenBrightness=f;getWindow().setAttributes(lp);prefs.edit().putInt("brightness",progress).apply();}}public void onStartTrackingTouch(SeekBar b){}public void onStopTrackingTouch(SeekBar b){}});body.addView(bright);space(body,16);body.addView(text("Ngôn ngữ",16,ink(),true));body.addView(text("Tiếng Việt (phiên bản này)",13,sub(),false));space(body,20);body.addView(btn(prefs.contains("pin")?"Đổi / tắt mã PIN":"Thiết lập mã PIN",()->pinSettings()));space(body,15);body.addView(text("MDT Music • Lưu offline • Không cần tài khoản",13,sub(),false));space(body,12);body.addView(text("Phiên bản v2.3.1",13,sub(),false));}
+ void settings(){settingsRow("Giao diện tối",dark,checked->{dark=checked;prefs.edit().putBoolean("dark",checked).apply();render();});space(body,12);body.addView(text("Độ sáng trong ứng dụng",16,ink(),true));SeekBar bright=new SeekBar(this);bright.setMax(100);bright.setProgress(prefs.getInt("brightness",100));bright.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener(){public void onProgressChanged(SeekBar b,int progress,boolean u){if(u){float f=Math.max(.1f,progress/100f);getWindow().getAttributes().screenBrightness=f;android.view.WindowManager.LayoutParams lp=getWindow().getAttributes();lp.screenBrightness=f;getWindow().setAttributes(lp);prefs.edit().putInt("brightness",progress).apply();}}public void onStartTrackingTouch(SeekBar b){}public void onStopTrackingTouch(SeekBar b){}});body.addView(bright);space(body,16);body.addView(text("Ngôn ngữ",16,ink(),true));body.addView(text("Tiếng Việt (phiên bản này)",13,sub(),false));space(body,20);body.addView(btn(prefs.contains("pin")?"Đổi / tắt mã PIN":"Thiết lập mã PIN",()->pinSettings()));space(body,15);body.addView(text("MDT Music • Lưu offline • Không cần tài khoản",13,sub(),false));space(body,12);body.addView(text("Phiên bản v2.3.2",13,sub(),false));}
  interface Checked{void set(boolean v);}void settingsRow(String label,boolean value,Checked cb){Switch sw=new Switch(this);sw.setText(label);sw.setTextColor(ink());sw.setChecked(value);sw.setOnCheckedChangeListener((v,c)->cb.set(c));body.addView(sw);}
  void pinSettings(){if(!prefs.contains("pin")){pinEntry("Tạo mã PIN", "Nhập 4 số để khóa ứng dụng",false, pin->confirmNewPin(pin));return;}pinEntry("Xác nhận mã PIN", "Nhập mã PIN hiện tại",false, pin->{if(hash(pin).equals(prefs.getString("pin",""))){new AlertDialog.Builder(this).setTitle("Quản lý mã PIN").setItems(new String[]{"Đổi mã PIN","Tắt mã PIN"},(d,which)->{if(which==1){prefs.edit().remove("pin").apply();toast("Đã tắt mã PIN");render();}else pinEntry("Mã PIN mới","Nhập 4 số mới",false,next->confirmNewPin(next));}).show();}else{toast("Mã PIN không đúng");pinSettings();}});}
  interface PinResult{void accept(String pin);}
