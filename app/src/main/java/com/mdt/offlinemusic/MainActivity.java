@@ -389,7 +389,7 @@ public class MainActivity extends Activity {
   body.addView(btn("Khôi phục thư viện từ ZIP",()->{new AlertDialog.Builder(this).setTitle("Khôi phục thư viện").setMessage("Các bài trong ZIP sẽ được nhập thêm vào thư viện hiện tại; không xóa những bài đang có. Chỉ dùng ZIP sao lưu do MDT Music tạo.").setNegativeButton("Hủy",null).setPositiveButton("Chọn ZIP",(d,w)->{Intent i=new Intent(Intent.ACTION_OPEN_DOCUMENT);i.addCategory(Intent.CATEGORY_OPENABLE);i.setType("application/zip");startActivityForResult(i,BACKUP_OPEN);}).show();}));space(body,17);
 
     break;
-   case "security":settingsHeader("Bảo mật");body.addView(btn(prefs.contains("pin")?"Đổi / tắt mã PIN":"Thiết lập mã PIN",()->pinSettings()));space(body,12);body.addView(btn("Mở khu vực riêng tư",()->pinEntry("Mã truy cập riêng tư","Nhập mã 4 chữ số",false,value->{if("0909".equals(value))startActivity(new Intent(this,VaultActivity.class));else toast("Mã riêng tư không hợp lệ");})));break;
+   case "security":settingsHeader("Bảo mật");body.addView(btn(prefs.contains("pin")?"Đổi / tắt mã PIN":"Thiết lập mã PIN",()->pinSettings()));space(body,12);break;
    case "language":settingsHeader("Ngôn ngữ");body.addView(text("Tiếng Việt (English chưa triển khai)",14,sub(),false));break;
    case "about":settingsHeader("Thông tin ứng dụng");body.addView(text("MDT Music • Phiên bản v2.5.0",14,sub(),false));break;
   }
