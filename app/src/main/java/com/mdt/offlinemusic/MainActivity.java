@@ -99,9 +99,10 @@ public class MainActivity extends Activity {
     db.removeAlbum(album);toast("Đã xóa danh sách phát");render();
    }).show();
  }
- String[] sortOptions={"A–Z", "Z–A", "Thời gian thêm (cũ nhất trước)"};
+ String[] sortOptions={"A–Z", "Z–A", "Thời gian thêm (cũ nhất trước)", "Thời gian thêm (mới nhất trước)"};
  void sortSongs(ArrayList<MusicDb.Song> tracks,int mode){
   if(mode==2)java.util.Collections.sort(tracks,(a,b)->Long.compare(a.id,b.id));
+  else if(mode==3)java.util.Collections.sort(tracks,(a,b)->Long.compare(b.id,a.id));
   else java.util.Collections.sort(tracks,(a,b)->{
    int order=String.CASE_INSENSITIVE_ORDER.compare(a.title==null?"":a.title,b.title==null?"":b.title);
    if(order==0)order=Long.compare(a.id,b.id);
