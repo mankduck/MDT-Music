@@ -63,6 +63,7 @@ public class VaultActivity extends Activity {
  private void showPrivateHome(){if(!unlocked)return;page("Khu vực riêng tư");
   add("Chọn chức năng",15);action(content,"▧ Album ẩn",this::showGate);
   action(content,"Ứng dụng ẩn trên Xiaomi",this::appHelp);
+  action(content,"♫ Chuyển sang MDT Music",()->{albumUnlocked=false;unlocked=false;startActivity(new Intent(this,MainActivity.class));finish();});
  }
  private void action(LinearLayout parent, String label, Runnable handler){
   TextView v=button(label,handler);LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(-1,-2);lp.bottomMargin=dp(12);parent.addView(v,lp);
@@ -71,6 +72,7 @@ public class VaultActivity extends Activity {
   add(entries.size()+" ảnh/video đã lưu và mã hóa",14);
   action(content,"＋ Thêm ảnh / video",()->{if(busy)return;selecting=true;Intent i=new Intent(Intent.ACTION_OPEN_DOCUMENT);i.setType("*/*");i.putExtra(Intent.EXTRA_MIME_TYPES,new String[]{"image/*","video/*"});i.putExtra(Intent.EXTRA_ALLOW_MULTIPLE,true);i.addCategory(Intent.CATEGORY_OPENABLE);startActivityForResult(i,PICK);});
   action(content,"⚙ Cài đặt Album ẩn",this::settings);
+  action(content,"‹ Quay lại khu vực riêng tư",()->{albumUnlocked=false;showPrivateHome();});
   LinearLayout toolbar=new LinearLayout(this);toolbar.setGravity(Gravity.CENTER_VERTICAL);toolbar.setOrientation(0);
   TextView title=new TextView(this);title.setText("Ảnh và video");title.setTextSize(16);title.setTextColor(0xFF202336);title.setTypeface(null,1);toolbar.addView(title,new LinearLayout.LayoutParams(0,-2,1));
   Spinner columns=new Spinner(this);String[] choices={"1 cột","2 cột","3 cột"};ArrayAdapter<String> adapter=new ArrayAdapter<>(this,android.R.layout.simple_spinner_dropdown_item,choices);columns.setAdapter(adapter);columns.setSelection(gridColumns-1);columns.setContentDescription("Số cột hiển thị");columns.setOnItemSelectedListener(new android.widget.AdapterView.OnItemSelectedListener(){public void onNothingSelected(android.widget.AdapterView<?> a){}public void onItemSelected(android.widget.AdapterView<?> a,View v,int position,long id){int count=position+1;if(gridColumns!=count){gridColumns=count;prefs.edit().putInt("grid_columns",count).apply();showHome();}}});toolbar.addView(columns,new LinearLayout.LayoutParams(dp(115),-2));content.addView(toolbar);
