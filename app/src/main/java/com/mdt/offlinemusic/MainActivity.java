@@ -4,7 +4,7 @@ import com.yausername.youtubedl_android.YoutubeDL;import com.yausername.youtubed
 import android.app.*;import android.os.*;import android.content.*;import android.database.*;import android.graphics.*;import android.graphics.drawable.*;import android.net.Uri;import android.provider.OpenableColumns;import android.text.*;import android.view.*;import android.view.inputmethod.*;import android.widget.*;import java.io.*;import java.security.*;import java.util.*;import java.util.zip.*;import org.json.*;
 
 public class MainActivity extends Activity {
- final int BG=0xFF0D1020,CARD=0xFF1A2034,PURPLE=0xFFB47AFF,WHITE=0xFFF4F4FA,MUTED=0xFF98A1B9;int tab=0; String managerSection="songs"; ArrayList<YoutubeItem> youtubePageItems=null; int managerPage=0; String managerQuery=""; boolean full=false;String openedAlbum=null;String query="",topic="Tất cả";MusicDb db;LinearLayout root,body,mini,nav;Handler handler=new Handler();MusicDb.Song editing;String pendingAudio="",pendingCover="";final int PICK_AUDIO=101,PICK_COVER=102,BACKUP_CREATE=201,BACKUP_OPEN=202;boolean dark=true;String settingsSection="";SharedPreferences prefs;boolean importing=false; boolean ytBusy=false; AlertDialog busyDialog; AlertDialog editorDialog; ImageView coverPreview;
+ final int BG=0xFF0D1020,CARD=0xFF1A2034,PURPLE=0xFFB47AFF,WHITE=0xFFF4F4FA,MUTED=0xFF98A1B9;int tab=0; String managerSection="songs"; ArrayList<YoutubeItem> youtubePageItems=null; int managerPage=0; String managerQuery=""; int managerSort=0; boolean full=false;String openedAlbum=null;String query="",topic="Tất cả";MusicDb db;LinearLayout root,body,mini,nav;Handler handler=new Handler();MusicDb.Song editing;String pendingAudio="",pendingCover="";final int PICK_AUDIO=101,PICK_COVER=102,BACKUP_CREATE=201,BACKUP_OPEN=202;boolean dark=true;String settingsSection="";SharedPreferences prefs;boolean importing=false; boolean ytBusy=false; AlertDialog busyDialog; AlertDialog editorDialog; ImageView coverPreview;
  BroadcastReceiver receiver=new BroadcastReceiver(){@Override public void onReceive(Context c,Intent i){updateMini();if(full)refreshPlayer();}};
  @Override public void onCreate(Bundle b){super.onCreate(b);getWindow().setStatusBarColor(BG);getWindow().setNavigationBarColor(BG);db=new MusicDb(this);prefs=getSharedPreferences("settings",MODE_PRIVATE);dark=prefs.getString("theme_mode",prefs.getBoolean("dark",false)?"dark":"light").equals("system")?systemDark():prefs.getString("theme_mode",prefs.getBoolean("dark",false)?"dark":"light").equals("dark");applySavedBrightness();if(Build.VERSION.SDK_INT>=33&&checkSelfPermission("android.permission.POST_NOTIFICATIONS")!=android.content.pm.PackageManager.PERMISSION_GRANTED)requestPermissions(new String[]{"android.permission.POST_NOTIFICATIONS"},7);if(prefs.contains("pin")){pinDialog();}else render();handler.postDelayed(new Runnable(){public void run(){if(full)refreshPlayer();else updateMini();handler.postDelayed(this,1000);}},1000);}
  @Override protected void onResume(){super.onResume();if(prefs!=null&&prefs.getString("theme_mode","light").equals("system")&&dark!=systemDark()){dark=systemDark();render();}if(Build.VERSION.SDK_INT>=33)registerReceiver(receiver,new IntentFilter(PlayerService.ACTION),Context.RECEIVER_NOT_EXPORTED);else registerReceiver(receiver,new IntentFilter(PlayerService.ACTION));}
@@ -65,10 +65,60 @@ public class MainActivity extends Activity {
  }
  void managerSectionPage(){
   if(!"songs".equals(managerSection)){TextView back=text("‹  Quay lại quản lý",14,buttonColor(),true);pad(back,5,10);body.addView(back);back.setOnClickListener(v->{managerSection="songs";render();});space(body,10);}
-  switch(managerSection){case "albums":body.addView(btn("＋ Tạo / quản lý album",()->albumEditor()));space(body,14);for(String a:db.albums()){LinearLayout item=horizontal();pad(item,12,14);item.setBackground(shape(card(),12));item.addView(text(a,16,ink(),true),new LinearLayout.LayoutParams(0,-2,1));item.addView(btn("Chọn bài",()->chooseAlbumSongs(a)));body.addView(item);space(body,8);}break;
+  switch(managerSection){case "albums":body.addView(btn("＋ Tạo / quản lý album",()->albumEditor()));space(body,14);for(String a:db.albums()){playlistRow(body,a);}break;
    case "youtube":youtubePlaylistPage();break;
    case "trash":deletedSongsScreen();break;
    default:manager();break;}
+ }
+ void playlistRow(LinearLayout container,String album){
+  LinearLayout item=vertical();pad(item,12,12);item.setBackground(shape(card(),12));
+  TextView name=text(album,16,ink(),true);name.setMaxLines(2);item.addView(name);space(item,9);
+  LinearLayout actions=horizontal();
+  TextView choose=btn("Chọn bài",()->chooseAlbumSongs(album));styleSmallButton(choose,buttonColor());
+  TextView rename=btn("Sửa",()->renamePlaylistDialog(album));styleSmallButton(rename,buttonColor());
+  TextView delete=btn("Xóa",()->deletePlaylistDialog(album));styleSmallButton(delete,0xFFC62828);
+  actions.addView(choose,new LinearLayout.LayoutParams(0,-2,2));spaceW(actions,7);
+  actions.addView(rename,new LinearLayout.LayoutParams(0,-2,1));spaceW(actions,7);
+  actions.addView(delete,new LinearLayout.LayoutParams(0,-2,1));item.addView(actions);
+  container.addView(item);space(container,9);
+ }
+ void renamePlaylistDialog(String oldName){
+  EditText input=edit("Tên danh sách phát");input.setSingleLine(true);input.setText(oldName);input.selectAll();
+  LinearLayout wrap=vertical();pad(wrap,18,12);wrap.addView(input);
+  new AlertDialog.Builder(this).setTitle("Đổi tên danh sách phát").setView(wrap)
+   .setNegativeButton("Hủy",null).setPositiveButton("Lưu",(d,w)->{
+    String newName=input.getText().toString().trim();
+    if(db.renameAlbum(oldName,newName)){toast("Đã đổi tên danh sách phát");render();}
+    else toast("Tên không hợp lệ hoặc đã tồn tại");
+   }).show();
+ }
+ void deletePlaylistDialog(String album){
+  new AlertDialog.Builder(this).setTitle("Xóa danh sách phát?")
+   .setMessage("Xóa ‘"+album+"’ khỏi danh sách phát? Các bài MP3 trong thư viện sẽ không bị xóa.")
+   .setNegativeButton("Hủy",null).setPositiveButton("Xóa",(d,w)->{
+    db.removeAlbum(album);toast("Đã xóa danh sách phát");render();
+   }).show();
+ }
+ String[] sortOptions={"A–Z", "Z–A", "Thời gian thêm (cũ nhất trước)"};
+ void sortSongs(ArrayList<MusicDb.Song> tracks,int mode){
+  if(mode==2)java.util.Collections.sort(tracks,(a,b)->Long.compare(a.id,b.id));
+  else java.util.Collections.sort(tracks,(a,b)->{
+   int order=String.CASE_INSENSITIVE_ORDER.compare(a.title==null?"":a.title,b.title==null?"":b.title);
+   if(order==0)order=Long.compare(a.id,b.id);
+   return mode==1?-order:order;
+  });
+ }
+ Spinner makeSortSpinner(int value,java.util.function.IntConsumer onChange){
+  Spinner spinner=new Spinner(this);
+  ArrayAdapter<String> adapter=new ArrayAdapter<String>(this,android.R.layout.simple_spinner_dropdown_item,sortOptions){
+   @Override public View getView(int i,View reuse,android.view.ViewGroup parent){TextView t=(TextView)super.getView(i,reuse,parent);t.setTextColor(ink());t.setTextSize(14);t.setPadding(dp(10),dp(9),dp(8),dp(9));return t;}
+   @Override public View getDropDownView(int i,View reuse,android.view.ViewGroup parent){TextView t=(TextView)super.getDropDownView(i,reuse,parent);t.setTextColor(0xFF242634);t.setBackgroundColor(0xFFFFFFFF);return t;}
+  };
+  spinner.setAdapter(adapter);spinner.setBackground(shape(pale(),10));spinner.setSelection(value);
+  spinner.setOnItemSelectedListener(new android.widget.AdapterView.OnItemSelectedListener(){
+   public void onNothingSelected(android.widget.AdapterView<?> p){}
+   public void onItemSelected(android.widget.AdapterView<?> p,View v,int position,long id){onChange.accept(position);}
+  });return spinner;
  }
  void youtubePlaylistPage(){
   body.addView(text("Dán link playlist công khai để đọc video. Nhạc đã lưu vẫn nghe offline.",14,sub(),false));space(body,12);
@@ -260,13 +310,17 @@ public class MainActivity extends Activity {
    String failure=error;runOnUiThread(()->{progress.dismiss();if(failure!=null)new AlertDialog.Builder(this).setTitle("Không tải được").setMessage(item.title+"\n"+failure).setPositiveButton("Tiếp tục",(d,w)->done.run()).show();else{toast("Đã lưu offline: "+item.title);done.run();}});
   }).start();
  }
+ LinearLayout managerResults;
  void manager(){
   body.addView(btn("＋ Nhập MP3 từ thiết bị",()->pickAudio()));space(body,10);
   space(body,8);
   title(body,"Danh sách quản lý",null);space(body,10);
   EditText search=edit("Tìm theo bài hát, nghệ sĩ hoặc album...");search.setSingleLine(true);
   search.setText(managerQuery);body.addView(search);space(body,10);
-  LinearLayout results=vertical();body.addView(results);
+  LinearLayout sortRow=horizontal();sortRow.addView(text("Sắp xếp",14,ink(),true),new LinearLayout.LayoutParams(0,-2,1));
+  Spinner sort=makeSortSpinner(managerSort,idx->{if(idx!=managerSort){managerSort=idx;managerPage=0;if(managerResults!=null)populateManager(managerResults);}});
+  sortRow.addView(sort,new LinearLayout.LayoutParams(dp(210),-2));body.addView(sortRow);space(body,12);
+  LinearLayout results=vertical();managerResults=results;body.addView(results);
   Runnable refresh=()->populateManager(results);
   search.addTextChangedListener(new TextWatcher(){
    public void beforeTextChanged(CharSequence t,int a,int c,int d){}
@@ -278,6 +332,7 @@ public class MainActivity extends Activity {
   target.removeAllViews();String q=managerQuery.trim().toLowerCase(java.util.Locale.ROOT);
   ArrayList<MusicDb.Song> filtered=new ArrayList<>();
   for(MusicDb.Song s:songs())if((s.title+" "+s.artist+" "+s.album).toLowerCase(java.util.Locale.ROOT).contains(q))filtered.add(s);
+  sortSongs(filtered,managerSort);
   int pageSize=20,totalPages=Math.max(1,(filtered.size()+pageSize-1)/pageSize);
   managerPage=Math.max(0,Math.min(managerPage,totalPages-1));
   TextView count=text("Tìm thấy "+filtered.size()+" bài hát",13,sub(),false);target.addView(count);space(target,9);
@@ -431,17 +486,23 @@ public class MainActivity extends Activity {
  EditText title=field(form,"Tên bài hát",s.title),artist=field(form,"Ca sĩ / tác giả",s.artist);ArrayList<String> names=db.albums();ArrayList<String> options=new ArrayList<>();options.add("Không chọn album");options.addAll(names);Spinner album=new Spinner(this);ArrayAdapter<String> adapter=new ArrayAdapter<String>(this,android.R.layout.simple_spinner_item,options){@Override public View getView(int position,View convertView,android.view.ViewGroup parent){TextView v=(TextView)super.getView(position,convertView,parent);v.setTextColor(0xFF222538);v.setTextSize(15);v.setPadding(dp(12),dp(10),dp(10),dp(10));return v;}@Override public View getDropDownView(int position,View convertView,android.view.ViewGroup parent){TextView v=(TextView)super.getDropDownView(position,convertView,parent);v.setTextColor(0xFF222538);v.setBackgroundColor(0xFFFFFFFF);v.setPadding(dp(14),dp(12),dp(14),dp(12));return v;}};album.setBackground(shape(0xFFFFFFFF,13));album.setDropDownVerticalOffset(dp(3));album.setAdapter(adapter);int selected=names.indexOf(s.album);album.setSelection(selected<0?0:selected+1);form.addView(text("Album",14,ink(),true));form.addView(album);space(form,10);
  EditText topicField=field(form,"Chủ đề",s.topic),desc=field(form,"Mô tả",s.description),lyrics=field(form,"Lời bài hát",s.lyrics);lyrics.setMinLines(4);form.addView(text("Ảnh bìa bài hát",14,ink(),true));coverPreview=new ImageView(this);coverPreview.setScaleType(ImageView.ScaleType.CENTER_CROP);form.addView(coverPreview,new LinearLayout.LayoutParams(dp(120),dp(120)));Bitmap current=loadBitmap(pendingCover);if(current!=null)coverPreview.setImageBitmap(current);else coverPreview.setVisibility(View.GONE);space(form,8);form.addView(btn("▧ Chọn ảnh từ điện thoại",()->pickCover()));ScrollView sv=new ScrollView(this);sv.addView(form);
  editorDialog=new AlertDialog.Builder(this).setTitle(s.id>0?"Chỉnh sửa bài hát":"Thêm bài hát").setView(sv).setPositiveButton("Lưu",null).setNegativeButton("Hủy",null).create();editorDialog.setOnDismissListener(d->{if(editing!=null&&editing.id==0&&!empty(editing.path))new File(editing.path).delete();editing=null;editorDialog=null;coverPreview=null;});editorDialog.setOnShowListener(v->{editorDialog.getButton(-1).setOnClickListener(w->{if(importing)return;String name=title.getText().toString().trim();if(name.isEmpty()){title.setError("Nhập tên bài hát");return;}if(empty(s.path)||!new File(s.path).isFile()){toast("File âm thanh không tồn tại");return;}s.title=name;s.artist=artist.getText().toString().trim();s.album=album.getSelectedItemPosition()==0?null:options.get(album.getSelectedItemPosition());s.topic=topicField.getText().toString().trim();s.description=desc.getText().toString().trim();s.lyrics=lyrics.getText().toString();s.cover=pendingCover;importing=true;editorDialog.getButton(-1).setEnabled(false);try{long id=db.save(s);if(id<0)throw new IllegalStateException("Không thể lưu bài hát");s.id=id;editorDialog.dismiss();render();new AlertDialog.Builder(this).setTitle("Thành công").setMessage("Đã lưu bài hát: "+s.title).setPositiveButton("OK",null).show();}catch(Exception ex){editorDialog.getButton(-1).setEnabled(true);toast(ex.getMessage());}finally{importing=false;}});editorDialog.getButton(-2).setOnClickListener(w->editorDialog.dismiss());});editorDialog.show();}
- void albumEditor(){LinearLayout layout=vertical();pad(layout,18,12);EditText name=field(layout,"Tên album mới",null);layout.addView(btn("＋ Tạo album",()->{String value=name.getText().toString().trim();if(db.addAlbum(value)){toast("Đã tạo album: "+value);render();albumEditor();}else toast("Tên album trống hoặc đã tồn tại");}));space(layout,18);for(String album:db.albums()){LinearLayout row=horizontal();row.addView(text(album,16,0xFF303444,true),new LinearLayout.LayoutParams(0,dp(50),1));row.addView(btn("Chọn bài",()->chooseAlbumSongs(album)));layout.addView(row);}ScrollView scroll=new ScrollView(this);scroll.addView(layout);new AlertDialog.Builder(this,AlertDialog.THEME_DEVICE_DEFAULT_LIGHT).setTitle("Quản lý album").setView(scroll).setPositiveButton("Đóng",null).show();}
+ void albumEditor(){LinearLayout layout=vertical();pad(layout,18,12);EditText name=field(layout,"Tên album mới",null);layout.addView(btn("＋ Tạo album",()->{String value=name.getText().toString().trim();if(db.addAlbum(value)){toast("Đã tạo album: "+value);render();albumEditor();}else toast("Tên album trống hoặc đã tồn tại");}));space(layout,18);for(String album:db.albums())playlistRow(layout,album);ScrollView scroll=new ScrollView(this);scroll.addView(layout);new AlertDialog.Builder(this,AlertDialog.THEME_DEVICE_DEFAULT_LIGHT).setTitle("Quản lý album").setView(scroll).setPositiveButton("Đóng",null).show();}
  void chooseAlbumSongs(String album){
   ArrayList<MusicDb.Song> all=songs();LinkedHashSet<Long> checked=new LinkedHashSet<>();
   for(MusicDb.Song s:all)if(album.equals(s.album))checked.add(s.id);
   LinearLayout layout=vertical();pad(layout,14,12);
   EditText search=edit("Tìm tên bài hát / ca sĩ...");search.setSingleLine(true);layout.addView(search);space(layout,12);
-  LinearLayout results=vertical();layout.addView(results);
+  final int[] order={0};
+  LinearLayout sortLine=horizontal();sortLine.addView(text("Sắp xếp",14,ink(),true),new LinearLayout.LayoutParams(0,-2,1));
+  LinearLayout results=vertical();
+  Spinner sort=makeSortSpinner(0,idx->{order[0]=idx;if(results!=null && search!=null){/* refreshed by spinner listener below */}});
+  sortLine.addView(sort,new LinearLayout.LayoutParams(dp(195),-2));layout.addView(sortLine);space(layout,12);
+  layout.addView(results);
   Runnable refresh=()->{
    results.removeAllViews();String q=search.getText().toString().toLowerCase(java.util.Locale.ROOT);
    int matched=0;
-   for(MusicDb.Song s:all){
+   ArrayList<MusicDb.Song> ordered=new ArrayList<>(all);sortSongs(ordered,order[0]);
+   for(MusicDb.Song s:ordered){
     if(!(s.title+" "+s.artist).toLowerCase(java.util.Locale.ROOT).contains(q))continue;
     matched++;
     LinearLayout row=horizontal();row.setBackground(shape(matched%2==0?pale():card(),12));row.setPadding(dp(12),dp(12),dp(12),dp(12));
@@ -455,7 +516,8 @@ public class MainActivity extends Activity {
    }
    if(matched==0)results.addView(text("Không tìm thấy bài hát phù hợp",14,0xFF697087,false));
   };
-  search.addTextChangedListener(new TextWatcher(){public void beforeTextChanged(CharSequence t,int a,int c,int f){}public void onTextChanged(CharSequence t,int st,int before,int count){refresh.run();}public void afterTextChanged(Editable e){}});refresh.run();
+  search.addTextChangedListener(new TextWatcher(){public void beforeTextChanged(CharSequence t,int a,int c,int f){}public void onTextChanged(CharSequence t,int st,int before,int count){refresh.run();}public void afterTextChanged(Editable e){}});
+  sort.setOnItemSelectedListener(new android.widget.AdapterView.OnItemSelectedListener(){public void onNothingSelected(android.widget.AdapterView<?> p){}public void onItemSelected(android.widget.AdapterView<?> p,View v,int pos,long id){order[0]=pos;refresh.run();}});refresh.run();
   ScrollView scroll=new ScrollView(this);scroll.addView(layout);
   new AlertDialog.Builder(this,AlertDialog.THEME_DEVICE_DEFAULT_LIGHT).setTitle("Bài hát trong: "+album).setView(scroll).setNegativeButton("Hủy",null).setPositiveButton("Lưu album",(d,w)->{
    for(MusicDb.Song s:all){if(checked.contains(s.id))db.assign(s.id,album);else if(album.equals(s.album))db.assign(s.id,null);}render();toast("Đã cập nhật album: "+album);
