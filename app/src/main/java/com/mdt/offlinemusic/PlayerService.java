@@ -19,7 +19,8 @@ public class PlayerService extends Service {
  public void toggle(){if(player==null)return;if(player.isPlaying())player.pause();else player.start();notifyState();}
  public void next(){if(song==null)return;int index=queue.indexOf(song.id);if(index<0){return;}if(index+1<queue.size())play(queue.get(index+1));else if(repeat&&!queue.isEmpty())play(queue.get(0));else {if(player!=null)player.pause();notifyState();}}
  public void previous(){if(song==null)return;if(player!=null&&player.getCurrentPosition()>3000){player.seekTo(0);notifyState();return;}int index=queue.indexOf(song.id);if(index>0)play(queue.get(index-1));else if(player!=null)player.seekTo(0);notifyState();}
- public void seek(int ms){if(player!=null){player.seekTo(ms);notifyState();}}
+ public void seek(int ms){if(player!=null){player.seekTo(Math.max(0,Math.min(ms,duration())));notifyState();}}
+ public void seekRelative(int deltaMs){if(player!=null){long target=(long)player.getCurrentPosition()+deltaMs;seek((int)Math.max(0,Math.min(target,(long)duration())));}}
  public boolean playing(){return player!=null&&player.isPlaying();}
  public int duration(){return player==null?0:player.getDuration();}public int position(){return player==null?0:player.getCurrentPosition();}
  public void setSleep(int minutes){if(sleep!=null)handler.removeCallbacks(sleep);sleep=null;if(minutes>0){sleep=()->{if(player!=null&&player.isPlaying())player.pause();notifyState();};handler.postDelayed(sleep,minutes*60000L);}}
